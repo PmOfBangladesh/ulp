@@ -5,6 +5,7 @@ import time
 from pathlib import Path
 from typing import Dict, FrozenSet, List, Optional, Tuple
 
+from helpers.logger import LOGGER
 from utils.engine import (
     THREAD_POOL,
     collect_datastore_paths,
@@ -46,6 +47,11 @@ _CRED_PATTERN_COMPILED: Dict[str, re.Pattern] = {
 ACCEPTED_FORMAT_KEYS: List[str] = list(_CRED_PATTERN_RAW.keys()) + list(_STRUCT_PATTERN_MAP.keys())
 
 _PHONE_STRIP_RE: re.Pattern = re.compile(r'[\s\-\(\)]')
+
+# Enhanced email validation regex
+_EMAIL_VALIDATION_RE: re.Pattern = re.compile(
+    r'^[a-zA-Z0-9][a-zA-Z0-9._%+\-]*@[a-zA-Z0-9][a-zA-Z0-9.\-]*\.[a-zA-Z]{2,}$'
+)
 
 _COMBO_FINDER_RE: re.Pattern = re.compile(r'\b\S+\s*[:;|,]\s*\S+', re.IGNORECASE)
 _LOGIN_CHECK_RE: re.Pattern = re.compile(
@@ -141,6 +147,13 @@ def _extract_cred_batch(batch: List[str], fmt: str) -> Tuple[List[str], int]:
         ident, sep, pwd = hits[-1]
         if len(ident) < _MIN_TOKEN_LEN or len(pwd) < _MIN_TOKEN_LEN:
             continue
+        
+        # Add email validation for mailpass format
+        if fmt == "mailpass":
+            # Validate email format to prevent false positives
+            if not _EMAIL_VALIDATION_RE.match(ident.lower()):
+                continue
+        
         key = _PHONE_STRIP_RE.sub('', ident) if fmt == "num_pass" else ident
         fp = key.lower()
         if fp not in seen:
@@ -310,6 +323,15 @@ def write_result_file(prefix: str, label: str, lines: List[str]) -> str:
 
 def write_ulp_file(keyword: str, lines: List[str]) -> str:
     return write_result_file("ULP", keyword, lines)
+
+
+def log_user_extraction(user_id: int, keyword: Optional[str], fmt_key: str, matched_count: int, source: str = "keyword") -> None:
+    """Log user extraction activity to LOGGER"""
+    search_source = f"keyword: {keyword}" if keyword and source == "keyword" else source
+    LOGGER.info(
+        f"USER_EXTRACTION | User ID: {user_id} | Format: {fmt_key} | "
+        f"Source: {search_source} | Matched Lines: {matched_count}"
+    )
 
 
 def get_file_size_str(path: str) -> str:

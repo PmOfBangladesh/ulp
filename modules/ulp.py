@@ -19,7 +19,7 @@ from helpers import (
     send_message,
 )
 from helpers.botutils import get_args_str
-from helpers.func import run_ulp_search, get_file_size_str, write_ulp_file
+from helpers.func import run_ulp_search, get_file_size_str, write_ulp_file, log_user_extraction
 
 prefixes = "".join(re.escape(p) for p in config.COMMAND_PREFIXES)
 ulp_pattern = re.compile(rf"^[{prefixes}]ulp(?:\s+.+)?$", re.IGNORECASE)
@@ -36,6 +36,8 @@ def build_channel_button():
 async def ulp_handler(event, bot):
     keyword = get_args_str(event).strip()
     chat_id = event.chat_id
+    sender = await event.get_sender()
+    user_id = sender.id
 
     if not keyword:
         await send_message(chat_id, "**❌ Please Provide Keyword After The Command**")
@@ -55,6 +57,9 @@ async def ulp_handler(event, bot):
     if not matched_lines:
         await edit_message(chat_id, status_msg.id, "**❌ Sorry Database Empty**")
         return
+
+    # Log user ULP search
+    log_user_extraction(user_id, keyword, "ULP", len(matched_lines), source="keyword")
 
     await edit_message(chat_id, status_msg.id, "**Found ☑️ Processing...**")
 

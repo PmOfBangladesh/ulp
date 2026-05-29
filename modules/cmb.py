@@ -20,7 +20,7 @@ from helpers import (
     send_message,
 )
 from helpers.botutils import get_args_str
-from helpers.func import run_combo_search, get_file_size_str, write_result_file
+from helpers.func import run_combo_search, get_file_size_str, write_result_file, log_user_extraction
 
 prefixes = "".join(re.escape(p) for p in config.COMMAND_PREFIXES)
 _cmb_pattern = re.compile(rf"^[{prefixes}]cmb(?:\s+.*)?$", re.IGNORECASE)
@@ -71,6 +71,8 @@ async def cmb_handler(event, bot):
 @ItsMrULPBot.on(events.CallbackQuery(data=re.compile(rb"^cmbfmt:")))
 async def cmb_format_cb(event):
     chat_id = event.chat_id
+    sender = await event.get_sender()
+    user_id = sender.id
     fmt_key = event.data.decode().split(":", 1)[1]
     session = _cmb_sessions.pop(chat_id, None)
 
@@ -100,6 +102,9 @@ async def cmb_format_cb(event):
     if not matched:
         await event.edit("**❌ Sorry Database Empty**")
         return
+
+    # Log user combo search
+    log_user_extraction(user_id, keyword, fmt_key, len(matched), source="keyword")
 
     await event.edit("**Found ☑️ Processing...**")
 
