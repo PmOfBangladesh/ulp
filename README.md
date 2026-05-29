@@ -1,96 +1,82 @@
-# 🤖 ItsMrULPBot
+# Aliya Ulp Telegram Bot
 
-A powerful async Telegram bot built with Telethon for searching, extracting, and processing ULP (URL:Login:Password) databases — with admin tools, combo generation, and smart file management.
+A fast, async Telegram bot for searching, extracting, and processing ULP (URL:Login:Password) databases. Built with Telethon + ripgrep for high‑volume text search, with admin tools for file management and broadcasts.
 
-[![Python](https://img.shields.io/badge/Python-3.11+-blue?logo=python)](https://python.org)
-[![Telethon](https://img.shields.io/badge/Telethon-Latest-green)](https://github.com/LonamiWebs/Telethon)
-[![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
+## Features
 
----
+- Keyword ULP search across large text databases
+- Extract formats: mail:pass, user:pass, number:pass, domain, and URL
+- Combo generation with selectable formats
+- Admin/owner tools: upload DB files, browse files, clean DB/dumps
+- Broadcast messages to tracked users
+- Usage statistics tracking
+- Async I/O with uvloop for performance
+- Auto‑cleanup of generated downloads
 
-## ✨ Features
-
-- 🔍 Keyword-based ULP search across large databases
-- 📤 Extract mail:pass, user:pass, number:pass combos
-- 🗂️ Combo generation with format selection
-- 📁 Database file viewer with pagination
-- 🧹 DB and dump cleanup tools for admins
-- 📡 File upload with real-time progress bar
-- ⚡ Async + uvloop for high-performance processing
-- 🛡️ Owner & admin-only restricted commands
-- 🔁 Auto cleanup of processed/temporary files
-
----
-
-## 🧰 Requirements
+## Requirements
 
 - Python 3.11+
-- [`ripgrep`](https://github.com/BurntSushi/ripgrep) installed as a system binary (`rg`)
-- Telegram API credentials (API ID, API Hash, Bot Token)
-- See `requirements.txt` for Python dependencies
+- `ripgrep` system binary (`rg`)
+- Telegram API ID, API Hash, and Bot Token
+- `telethon`, `uvloop`, `cryptg` (see `requirements.txt`)
 
 ### Install ripgrep
 
-**Debian / Ubuntu:**
+**Debian/Ubuntu**
 ```bash
-apt install ripgrep
+sudo apt update
+sudo apt install -y ripgrep
 ```
 
-**Arch Linux:**
+**Arch**
 ```bash
-pacman -S ripgrep
+sudo pacman -S ripgrep
 ```
 
-**macOS:**
+**macOS**
 ```bash
 brew install ripgrep
 ```
 
----
-
-## 📦 Installation
+## Quick Start (Local)
 
 ```bash
-git clone https://github.com/abirxdhack/ItsMrULPBot
-cd ItsMrULPBot
+git clone https://github.com/PmOfBangladesh/ulp
+cd ulp
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 ```
 
----
+## Configuration
 
-## ⚙️ Configuration
-
-Open `config.py` and fill in your values:
+Edit `config.py` and fill in your values:
 
 ```python
-API_ID       = 0              # Your Telegram API ID
-API_HASH     = ''             # Your Telegram API Hash
-BOT_TOKEN    = ''             # Your Bot Token from @BotFather
-OWNER_ID     = 0              # Your Telegram user ID
-ADMIN_ID     = 0              # Admin Telegram user ID
-UPDATE_CHANNEL_URL = 't.me/yourchannel'
-COMMAND_PREFIXES   = ['/', '!', '.']
+API_ID = YOUR_API_ID
+API_HASH = 'YOUR_API_HASH'
+BOT_TOKEN = 'YOUR_BOT_TOKEN'
+UPDATE_CHANNEL_URL = 't.me/NullError_XD'
+COMMAND_PREFIXES = ['/', '!', '.', ',', '$', '#']
+
+OWNER_ID = 123456789
+ADMIN_ID = 123456789
 ```
 
-Get your API credentials at [my.telegram.org](https://my.telegram.org).
+Get your API credentials at https://my.telegram.org.
 
----
+## Database Setup
 
-## 🗄️ Database Setup
-
-Place your `.txt` ULP database files inside the `data/` folder:
+Place `.txt` ULP database files in the `data/` folder:
 
 ```
-ItsMrULPBot/
-├── data/
-│   ├── database1.txt
-│   ├── database2.txt
-│   └── ...
+ulp/
+└── data/
+    ├── database1.txt
+    └── database2.txt
 ```
 
-Each file should contain one record per line in any of these formats:
+Supported record patterns include:
 
 ```
 url:email:password
@@ -98,83 +84,161 @@ url:username:password
 url:phonenumber:password
 ```
 
----
+The bot also stores user tracking and stats in:
+- `data/.userdb.json`
+- `data/.stats.json`
 
-## ▶️ Run Bot
+Keep the `data/` directory persistent if you want broadcasts and stats to survive restarts.
+
+## Run the Bot
 
 ```bash
 python main.py
 ```
 
----
+## Commands
 
-## 💬 Commands
-
-### Public Commands
+**Public**
 
 | Command | Description |
 |---|---|
-| `/start` | Show welcome message |
-| `/help` | Show help message |
-| `/cmds` | List all commands |
+| `/start` | Welcome message |
+| `/help` or `/cmds` | Help and command list |
 | `/ulp <keyword>` | Search ULP database by keyword |
-| `/extract <keyword>` | Extract specific format from keyword or file |
-| `/cmb <keyword>` | Generate combo file for a keyword |
+| `/extract <keyword>` | Extract data by keyword |
+| `/extract` (reply to .txt) | Extract from replied file |
+| `/cmb <keyword>` | Generate combo file |
 
-### Admin / Owner Commands
+**Admin / Owner**
 
 | Command | Description |
 |---|---|
-| `/add` | Upload and add `.txt` database files to the server |
-| `/files` | Browse all database files with Next/Previous navigation |
-| `/clean` | View DB stats and access cleanup tools |
+| `/add <count>` | Upload and add DB files |
+| `/files` | Browse DB files with pagination |
+| `/clean` | DB/dump cleanup tools |
+| `/broadcast` (reply) | Broadcast a message to users |
+| `/stats` | Bot usage statistics |
+| `/restart` | Restart the bot process |
+| `/stop` | Stop the bot |
 
----
+> Command prefixes are configurable in `config.py` (default: `/ ! . , $ #`).
 
-## 🗂️ Project Structure
+## Project Structure
 
 ```
-ItsMrULPBot/
-├── main.py              # Entry point — loads all handlers and starts bot
-├── bot.py               # TelegramClient instance
+ulp/
+├── main.py              # Entry point
+├── bot.py               # Telethon client
 ├── config.py            # Bot configuration
-├── core/
-│   └── start.py         # /start command handler
-├── modules/
-│   ├── help.py          # /help and /cmds handler
-│   ├── ulp.py           # /ulp search handler
-│   ├── extract.py       # /extract handler
-│   ├── cmb.py           # /cmb combo handler
-│   ├── add.py           # /add database upload handler
-│   ├── clean.py         # /clean and /files admin handler
-│   └── callback.py      # Inline button callback handler
-├── helpers/
-│   ├── botutils.py      # send_message, edit_message, etc.
-│   ├── buttons.py       # SmartButtons inline keyboard builder
-│   ├── func.py          # Search and file write logic
-│   ├── pgbar.py         # Upload progress bar
-│   ├── utils.py         # new_task, clean_download helpers
-│   └── logger.py        # Logging setup
-├── utils/
-│   └── engine.py        # Core ripgrep search engine wrapper
-├── data/                # Place your .txt ULP databases here
-├── downloads/           # Temporary output files (auto-cleaned)
+├── core/                # Core handlers
+├── modules/             # Command modules
+├── helpers/             # Utilities (search, logging, buttons, stats)
+├── utils/               # Search engine wrapper
+├── data/                # ULP databases + user/stats JSON
+├── downloads/           # Generated files (auto‑cleaned)
 ├── requirements.txt
 └── pyproject.toml
 ```
 
----
+## Full Deployment Guide (VPS / Server)
 
-## ⚠️ Notes
+### 1) Prepare the server
 
-- The `downloads/` folder is auto-cleaned after every file is sent.
-- Only **Owner** and **Admin** can use `/add`, `/files`, and `/clean`.
-- All other users are silently ignored on restricted commands.
-- Intended for private/personal use only — handle databases responsibly.
+Recommended: Ubuntu 22.04+ or Debian 12.
 
----
+```bash
+sudo apt update
+sudo apt install -y git ripgrep python3.11 python3.11-venv python3.11-dev build-essential
+```
 
-## 👤 Credits
+### 2) Create a service user (optional but recommended)
 
-- 👨‍💻 Dev: **@ISmartCoder**
-- 📢 Updates: **@abirxdhackz**
+```bash
+sudo useradd -m -s /bin/bash ulp
+sudo su - ulp
+```
+
+### 3) Clone and install
+
+```bash
+git clone https://github.com/PmOfBangladesh/ulp
+cd ulp
+python3.11 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+### 4) Configure the bot
+
+Edit `config.py` with your API ID, API Hash, Bot Token, OWNER_ID, and ADMIN_ID.
+
+### 5) Add database files
+
+Copy your `.txt` ULP files into `data/`.
+
+### 6) Run as a systemd service
+
+Create a service file (adjust paths/user):
+
+```bash
+sudo tee /etc/systemd/system/ulp-bot.service > /dev/null <<'SERVICE'
+[Unit]
+Description=Aliya Ulp Telegram Bot
+After=network.target
+
+[Service]
+Type=simple
+User=ulp
+WorkingDirectory=/home/ulp/ulp
+ExecStart=/home/ulp/ulp/venv/bin/python /home/ulp/ulp/main.py
+Restart=on-failure
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+```
+
+Enable and start:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now ulp-bot
+```
+
+Logs:
+
+```bash
+sudo journalctl -u ulp-bot -f
+```
+
+### 7) Update the bot
+
+```bash
+cd /home/ulp/ulp
+source venv/bin/activate
+git pull
+pip install -r requirements.txt
+sudo systemctl restart ulp-bot
+```
+
+### 8) Quick run without systemd (screen/tmux)
+
+```bash
+source venv/bin/activate
+python main.py
+```
+
+## Notes
+
+- `downloads/` is auto‑cleaned after sending files.
+- Only Owner/Admin can use `/add`, `/files`, `/clean`, `/broadcast`, `/stats`, `/restart`, `/stop`.
+- Keep your API keys and bot token private.
+- Handle ULP data responsibly and follow applicable laws.
+
+## Credits
+
+- Owner: **@CodeNinjaXd**
+- Updates channel: **@NullError_XD**
+- Main developer: **@ISmartCoder**
+- Modified by: PmOfBangladesh

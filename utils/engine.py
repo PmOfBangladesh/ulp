@@ -6,8 +6,8 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import FrozenSet, List, Tuple
 
-API_OWNER: str = "@ISmartCoder"
-API_DEV: str = "@abirxdhackz"
+API_OWNER: str = "@CodeNinjaXd"
+API_DEV: str = "@NullError_XD"
 API_VERSION: str = "2.3.68"
 
 THREAD_POOL: ThreadPoolExecutor = ThreadPoolExecutor(

@@ -4,7 +4,7 @@ import config
 from helpers.logger import LOGGER
 
 ItsMrULPBot = TelegramClient(
-    session='ItsMrULPBot',
+    session='AliyaUlp',
     api_id=config.API_ID,
     api_hash=config.API_HASH,
     connection_retries=None,
