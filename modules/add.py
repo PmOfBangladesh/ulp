@@ -1,6 +1,6 @@
 import asyncio
+import os
 import re
-import time
 from pathlib import Path
 from typing import Dict, List
 
@@ -9,6 +9,7 @@ from telethon import events
 import config
 from bot import ItsMrULPBot
 from helpers import LOGGER, edit_message, new_task, send_message, get_all_users, increment_stat
+from helpers.func import _clean_mixed_combo_line
 
 prefixes = "".join(re.escape(p) for p in config.COMMAND_PREFIXES)
 add_pattern = re.compile(rf"^[{prefixes}]add(?:\s+.*)?$", re.IGNORECASE)
@@ -18,25 +19,67 @@ _AUTHORIZED_IDS = {config.OWNER_ID, config.ADMIN_ID}
 _add_sessions: Dict[int, Dict] = {}
 
 
+
+
 def _is_authorized(user_id: int) -> bool:
     return user_id in _AUTHORIZED_IDS
 
 
-async def _notify_users_new_ulp(file_count: int):
-    """Notify all users about new ULP data added."""
+def _count_valid_lines(file_path: str) -> int:
+    """Count lines matching the valid format: url:mail/user/phone:pass"""
+    try:
+        count = 0
+        with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
+            for line in f:
+                if _clean_mixed_combo_line(line):
+                    count += 1
+        return count
+    except Exception as exc:
+        LOGGER.error(f"Error counting valid lines in {file_path}: {exc}")
+        return 0
+
+
+def _calculate_total_size_mb(file_paths: List[str]) -> str:
+    """Calculate total size of all files and return as MB or GB string."""
+    try:
+        total_bytes = 0
+        for path in file_paths:
+            if os.path.exists(path):
+                total_bytes += os.path.getsize(path)
+        
+        if total_bytes < 1024 * 1024:
+            return f"{total_bytes / 1024:.2f} KB"
+        elif total_bytes < 1024 * 1024 * 1024:
+            return f"{total_bytes / (1024 * 1024):.2f} MB"
+        else:
+            return f"{total_bytes / (1024 * 1024 * 1024):.2f} GB"
+    except Exception as exc:
+        LOGGER.error(f"Error calculating size: {exc}")
+        return "0 MB"
+
+
+def _build_add_summary_message(file_count: int, total_size: str, total_valid_lines: int) -> str:
+    """Build the enhanced summary message for /add command."""
+    return (
+        f"**🎉 New Fresh ULP Added! 📥**\n"
+        f"**━━━━━━━━━━━━━━━━━━━**\n"
+        f"**New Database Files** : `{file_count}`\n"
+        f"**New Database Size**  : `{total_size}`\n"
+        f"**Total Valid Lines**  : `{total_valid_lines}`\n"
+        f"**━━━━━━━━━━━━━━━━━━━**\n"
+        f"**Try using /ulp command to search!**"
+    )
+
+
+async def _notify_users_new_ulp(file_count: int, total_size: str, total_valid_lines: int):
+    """Notify all users about new ULP data added with full summary."""
     users = get_all_users()
     if not users:
         return
     
     increment_stat("total_ulp_additions", 1)
     
-    message = (
-        f"**🎉 New Fresh ULP Line Added! 📥**\n"
-        f"**━━━━━━━━━━━━━━━━**\n"
-        f"**New Database Files** : `{file_count}`\n"
-        f"**━━━━━━━━━━━━━━━━**\n"
-        f"**Try using /ulp command to search!**"
-    )
+    message = _build_add_summary_message(file_count, total_size, total_valid_lines)
     
     success = 0
     failed = 0
@@ -54,6 +97,7 @@ async def _notify_users_new_ulp(file_count: int):
             await asyncio.sleep(0.05)
     
     LOGGER.info(f"Notified {success} users about new ULP data (Failed: {failed})")
+
 
 
 @ItsMrULPBot.on(events.NewMessage(pattern=add_pattern))
@@ -124,6 +168,8 @@ async def add_file_receiver(event, bot):
 
     failed = 0
     saved_count = 0
+    saved_files: List[str] = []
+    
     for file_event in collected_events:
         try:
             safe_name = re.sub(r'[^\w\-.]', '_', file_event.file.name or "db.txt")
@@ -137,13 +183,25 @@ async def add_file_receiver(event, bot):
             await file_event.download_media(file=dest)
             LOGGER.info(f"Database file saved: {Path(dest).name}")
             saved_count += 1
+            saved_files.append(dest)
         except Exception as exc:
             LOGGER.error(f"add_file_receiver download error: {exc}")
             failed += 1
 
     success = len(collected_events) - failed
+    
+    # Calculate summary statistics
+    total_valid_lines = 0
+    if saved_files:
+        for file_path in saved_files:
+            total_valid_lines += _count_valid_lines(file_path)
+    
+    total_size = _calculate_total_size_mb(saved_files)
+    
+    # Display enhanced summary in admin chat
     if failed == 0:
-        await edit_message(chat_id, confirm_msg.id, "**Successfully Filed Databases With Them**")
+        summary_msg = _build_add_summary_message(saved_count, total_size, total_valid_lines)
+        await edit_message(chat_id, confirm_msg.id, summary_msg)
     else:
         await edit_message(
             chat_id,
@@ -154,5 +212,5 @@ async def add_file_receiver(event, bot):
     # Notify all users about new ULP data
     if saved_count > 0:
         await asyncio.sleep(1)
-        await _notify_users_new_ulp(saved_count)
+        await _notify_users_new_ulp(saved_count, total_size, total_valid_lines)
 
