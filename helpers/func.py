@@ -26,7 +26,7 @@ _ULP_LINE_RE: re.Pattern = re.compile(
 )
 
 _CRED_PATTERN_RAW: Dict[str, str] = {
-    "mailpass": r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})([:|])([^\s]+)',
+    "mailpass": r'(^|[\s])([a-zA-Z0-9][a-zA-Z0-9._%+\-]*@[a-zA-Z0-9][a-zA-Z0-9.\-]*\.[a-zA-Z]{2,})([:|])([^\s]+)',
     "userpass": r'([a-zA-Z0-9_-]{4,})([:|])([^\s]+)',
     "num_pass":  r'((?:\+?)\d[\d\s\-\(\)]*?\d)([:|])([^\s]+)',
 }
@@ -41,7 +41,7 @@ _STRUCT_PATTERN_MAP: Dict[str, re.Pattern] = {
 }
 
 _CRED_PATTERN_COMPILED: Dict[str, re.Pattern] = {
-    k: re.compile(v) for k, v in _CRED_PATTERN_RAW.items()
+    k: re.compile(v, re.MULTILINE if k == "mailpass" else 0) for k, v in _CRED_PATTERN_RAW.items()
 }
 
 ACCEPTED_FORMAT_KEYS: List[str] = list(_CRED_PATTERN_RAW.keys()) + list(_STRUCT_PATTERN_MAP.keys())
@@ -154,7 +154,13 @@ def _extract_cred_batch(batch: List[str], fmt: str) -> Tuple[List[str], int]:
         if not hits:
             continue
         tally += len(hits)
-        ident, sep, pwd = hits[-1]
+        
+        # Handle mailpass format with new group structure (anchor, email, sep, pwd)
+        if fmt == "mailpass":
+            _, ident, sep, pwd = hits[-1]
+        else:
+            ident, sep, pwd = hits[-1]
+        
         if len(ident) < _MIN_TOKEN_LEN or len(pwd) < _MIN_TOKEN_LEN:
             continue
         
@@ -162,6 +168,13 @@ def _extract_cred_batch(batch: List[str], fmt: str) -> Tuple[List[str], int]:
         if fmt == "mailpass":
             # Step 1: Extract email, Step 2: Validate email format
             if not _EMAIL_VALIDATION_RE.match(ident.lower()):
+                continue
+            # Additional check: reject if email or password contains URL/path patterns
+            ident_lower = ident.lower()
+            pwd_lower = pwd.lower()
+            if any(marker in ident_lower for marker in ('://', '//', 'http://', 'https://', 'ftp://', 'android://')):
+                continue
+            if pwd_lower.startswith('http://') or pwd_lower.startswith('https://') or pwd_lower.startswith('//'):
                 continue
         elif fmt == "userpass":
             # Step 1: Extract username, Step 2: Validate username format
