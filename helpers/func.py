@@ -26,7 +26,7 @@ _ULP_LINE_RE: re.Pattern = re.compile(
 )
 
 _CRED_PATTERN_RAW: Dict[str, str] = {
-    "mailpass": r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})([:|])([^\s]+)',
+    "mailpass": r'(^|[\s])([a-zA-Z0-9][a-zA-Z0-9._%+\-]*@[a-zA-Z0-9][a-zA-Z0-9.\-]*\.[a-zA-Z]{2,})([:|])([^\s]+)',
     "userpass": r'([a-zA-Z0-9_-]{4,})([:|])([^\s]+)',
     "num_pass":  r'((?:\+?)\d[\d\s\-\(\)]*?\d)([:|])([^\s]+)',
 }
@@ -41,7 +41,7 @@ _STRUCT_PATTERN_MAP: Dict[str, re.Pattern] = {
 }
 
 _CRED_PATTERN_COMPILED: Dict[str, re.Pattern] = {
-    k: re.compile(v) for k, v in _CRED_PATTERN_RAW.items()
+    k: re.compile(v, re.MULTILINE if k == "mailpass" else 0) for k, v in _CRED_PATTERN_RAW.items()
 }
 
 ACCEPTED_FORMAT_KEYS: List[str] = list(_CRED_PATTERN_RAW.keys()) + list(_STRUCT_PATTERN_MAP.keys())
@@ -154,7 +154,13 @@ def _extract_cred_batch(batch: List[str], fmt: str) -> Tuple[List[str], int]:
         if not hits:
             continue
         tally += len(hits)
-        ident, sep, pwd = hits[-1]
+        
+        # Handle mailpass format with new group structure (anchor, email, sep, pwd)
+        if fmt == "mailpass":
+            _, ident, sep, pwd = hits[-1]
+        else:
+            ident, sep, pwd = hits[-1]
+        
         if len(ident) < _MIN_TOKEN_LEN or len(pwd) < _MIN_TOKEN_LEN:
             continue
         
@@ -162,6 +168,13 @@ def _extract_cred_batch(batch: List[str], fmt: str) -> Tuple[List[str], int]:
         if fmt == "mailpass":
             # Step 1: Extract email, Step 2: Validate email format
             if not _EMAIL_VALIDATION_RE.match(ident.lower()):
+                continue
+            # Additional check: reject if email or password contains URL/path patterns
+            ident_lower = ident.lower()
+            pwd_lower = pwd.lower()
+            if any(marker in ident_lower for marker in ('://', '//', 'http://', 'https://', 'ftp://', 'android://')):
+                continue
+            if pwd_lower.startswith('http://') or pwd_lower.startswith('https://') or pwd_lower.startswith('//'):
                 continue
         elif fmt == "userpass":
             # Step 1: Extract username, Step 2: Validate username format
@@ -364,6 +377,144 @@ def log_user_extraction(user_id: int, keyword: Optional[str], fmt_key: str, matc
         f"USER_EXTRACTION | User ID: {user_id} | Format: {fmt_key} | "
         f"Source: {search_source} | Matched Lines: {matched_count}"
     )
+
+
+def _clean_mixed_combo_line(line: str) -> Optional[Tuple[str, str, str]]:
+    """
+    Clean a mixed combo line and extract url:username:password or email:pass or phone:pass.
+    Returns (credential_type, identifier, password) or None if invalid.
+    credential_type: "email", "user", "phone", "url_email", "url_user", "url_phone"
+    """
+    line = line.strip().replace('\r', '')
+    if not line or line.startswith('#'):
+        return None
+
+    parts = [p.strip() for p in line.split(':')]
+    if len(parts) < 2:
+        return None
+
+    # Check if it's a URL format (http://, https://, ftp://, etc.)
+    # For URL patterns, we need to recombine the protocol and domain
+    if parts[0].lower() in ('http', 'https', 'ftp', 'android'):
+        # Recombine URL: http://domain... -> http://domain (parts[0]:parts[1])
+        # Then identifier and password are the last two meaningful parts
+        if len(parts) >= 4:  # protocol : //domain : identifier : password
+            identifier = parts[-2]
+            password = parts[-1]
+            
+            # Detect identifier type
+            if '@' in identifier and '.' in identifier:
+                return ("url_email", identifier, password)
+            elif re.match(r'^\+?[\d\s\-\(\)]+$', identifier):
+                return ("url_phone", identifier, password)
+            elif re.match(r'^[a-zA-Z0-9_-]{4,}$', identifier):
+                return ("url_user", identifier, password)
+        return None
+
+    # Standard 2-part format: identifier:pass (should be checked first before domain format)
+    if len(parts) == 2:
+        identifier = parts[0]
+        password = parts[1]
+        
+        if not identifier or not password or len(identifier) < 3 or len(password) < 3:
+            return None
+        
+        # Detect identifier type
+        if '@' in identifier and '.' in identifier:
+            # Email validation
+            if _EMAIL_VALIDATION_RE.match(identifier.lower()):
+                return ("email", identifier, password)
+        elif re.match(r'^\+?[\d\s\-\(\)]+$', identifier):
+            # Phone validation
+            cleaned = _PHONE_STRIP_RE.sub('', identifier).replace('+', '')
+            if len(cleaned) >= 7:
+                return ("phone", identifier, password)
+        elif re.match(r'^[a-zA-Z0-9_-]{4,}$', identifier):
+            # Username validation
+            return ("user", identifier, password)
+        return None
+
+    # Check if it's a domain format (has a dot but not a URL) - 3+ parts
+    if '.' in parts[0] and not parts[0].startswith(('http', 'https', 'ftp', 'android')):
+        # Domain format: domain.com:identifier:pass or domain.com:identifier:pass
+        if len(parts) >= 3:
+            identifier = parts[-2]
+            password = parts[-1]
+            
+            # Detect identifier type
+            if '@' in identifier and '.' in identifier:
+                return ("email", identifier, password)
+            elif re.match(r'^\+?[\d\s\-\(\)]+$', identifier):
+                return ("phone", identifier, password)
+            elif re.match(r'^[a-zA-Z0-9_-]{4,}$', identifier):
+                return ("user", identifier, password)
+        return None
+
+    return None
+
+
+def _scan_mixed_combo_batch(batch: List[str]) -> Tuple[List[Tuple[str, str, str]], int]:
+    """Scan batch of lines and extract mixed format combos. Returns list of (type, identifier, password)."""
+    results: List[Tuple[str, str, str]] = []
+    rejected: int = 0
+    
+    for ln in batch:
+        result = _clean_mixed_combo_line(ln)
+        if result:
+            results.append(result)
+        else:
+            rejected += 1
+    
+    return results, rejected
+
+
+async def _run_mixed_combo_pipeline(lines: List[str]) -> Tuple[List[Tuple[str, str, str]], int]:
+    """Run async pipeline for mixed combo extraction."""
+    total = len(lines)
+    chunk = _BIG_CHUNK if total > _CHUNK_CUTOFF else _SMALL_CHUNK
+    gathered: List[Tuple[str, str, str]] = []
+    loop = asyncio.get_running_loop()
+    
+    for i in range(0, total, chunk):
+        res, _ = await loop.run_in_executor(THREAD_POOL, _scan_mixed_combo_batch, lines[i:i + chunk])
+        gathered.extend(res)
+        await release_event_loop(i)
+    
+    # Deduplicate by (type, identifier, password) tuple
+    seen: set = set()
+    unique: List[Tuple[str, str, str]] = []
+    for item in gathered:
+        key = (item[0], item[1].lower(), item[2].lower())
+        if key not in seen:
+            seen.add(key)
+            unique.append(item)
+    
+    removed = len(gathered) - len(unique)
+    return unique, removed
+
+
+async def scan_db_for_mixed_combos(caller_file: str) -> Tuple[List[Tuple[str, str, str]], int, float]:
+    """Scan entire database for mixed format combos."""
+    t0 = time.perf_counter()
+    paths = collect_datastore_paths(caller_file)
+    if not paths:
+        return [], 0, _ms(t0)
+    
+    # Read all lines from all database files
+    all_lines: List[str] = []
+    for path in paths:
+        try:
+            with open(path, 'r', encoding='utf-8', errors='replace') as f:
+                all_lines.extend([ln.rstrip('\n') for ln in f if ln.strip()])
+        except Exception as e:
+            LOGGER.error(f"Error reading {path}: {e}")
+            continue
+    
+    if not all_lines:
+        return [], 0, _ms(t0)
+    
+    unique, removed = await _run_mixed_combo_pipeline(all_lines)
+    return unique, removed, _ms(t0)
 
 
 def get_file_size_str(path: str) -> str:
