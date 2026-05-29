@@ -5,7 +5,7 @@ from telethon import events
 
 import config
 from bot import ItsMrULPBot
-from helpers import LOGGER, SmartButtons, edit_message, send_message
+from helpers import LOGGER, SmartButtons, edit_message, new_task, send_message
 
 prefixes = "".join(re.escape(p) for p in config.COMMAND_PREFIXES)
 start_pattern = re.compile(rf"^[{prefixes}]start(?:\s+.+)?$", re.IGNORECASE)
@@ -20,7 +20,8 @@ def build_start_markup():
 
 
 @ItsMrULPBot.on(events.NewMessage(pattern=start_pattern))
-async def start_handler(event):
+@new_task
+async def start_handler(event, bot):
     sender = await event.get_sender()
     first_name = sender.first_name or ""
     last_name = sender.last_name or ""

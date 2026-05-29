@@ -28,6 +28,7 @@ from helpers.func import (
     get_file_size_str,
     write_result_file,
     read_lines_from_file,
+    log_user_extraction,
 )
 
 prefixes = "".join(re.escape(p) for p in config.COMMAND_PREFIXES)
@@ -63,6 +64,7 @@ def _build_channel_button() -> object:
 
 async def _do_extraction(
     chat_id: int,
+    user_id: int,
     status_msg: Message,
     keyword: Optional[str],
     fmt_key: str,
@@ -78,10 +80,12 @@ async def _do_extraction(
             matched_lines, dupes_removed, elapsed_ms = await run_extract_on_lines(
                 source_lines, fmt_key
             )
+            source_type = "file"
         else:
             matched_lines, dupes_removed, elapsed_ms = await run_extract_on_datastore(
                 keyword, fmt_key, caller_file
             )
+            source_type = "keyword"
     except Exception as exc:
         LOGGER.error(f"_do_extraction error: {exc}")
         await edit_message(chat_id, status_msg.id, "**❌ Something Went Wrong During Processing**")
@@ -90,6 +94,9 @@ async def _do_extraction(
     if not matched_lines:
         await edit_message(chat_id, status_msg.id, "**❌ Sorry No Results Found In Database**")
         return
+
+    # Log user extraction
+    log_user_extraction(user_id, keyword, fmt_key, len(matched_lines), source=source_type)
 
     await edit_message(chat_id, status_msg.id, "**Found ☑️ Processing...**")
 
@@ -140,6 +147,10 @@ async def _do_extraction(
 @new_task
 async def extract_command_handler(event, bot):
     chat_id = event.chat_id
+    sender = await event.get_sender()
+    from helpers import add_user
+    add_user(sender.id)
+    
     keyword = get_args_str(event).strip() or None
     replied_file_path: Optional[str] = None
 
@@ -186,6 +197,8 @@ async def extract_command_handler(event, bot):
 @ItsMrULPBot.on(events.CallbackQuery(data=re.compile(rb"^exfmt:")))
 async def extract_format_callback(event):
     chat_id = event.chat_id
+    sender = await event.get_sender()
+    user_id = sender.id
     raw_data = event.data.decode("utf-8", errors="replace")
     fmt_key = raw_data.split(":", 1)[1]
 
@@ -215,6 +228,7 @@ async def extract_format_callback(event):
 
     await _do_extraction(
         chat_id=chat_id,
+        user_id=user_id,
         status_msg=status_msg,
         keyword=keyword,
         fmt_key=fmt_key,
