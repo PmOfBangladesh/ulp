@@ -39,6 +39,13 @@ def _count_valid_lines(file_path: str) -> int:
         return 0
 
 
+async def _async_count_valid_lines(file_path: str) -> int:
+    """Asynchronously count lines matching the valid format: url:mail/user/phone:pass"""
+    import asyncio
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, _count_valid_lines, file_path)
+
+
 def _calculate_total_size_mb(file_paths: List[str]) -> str:
     """Calculate total size of all files and return as MB or GB string."""
     try:
@@ -168,7 +175,7 @@ async def add_file_receiver(event, bot):
 
     failed = 0
     saved_count = 0
-    saved_files: List[str] = []
+    saved_file_paths: List[str] = []
     
     for file_event in collected_events:
         try:
@@ -183,7 +190,7 @@ async def add_file_receiver(event, bot):
             await file_event.download_media(file=dest)
             LOGGER.info(f"Database file saved: {Path(dest).name}")
             saved_count += 1
-            saved_files.append(dest)
+            saved_file_paths.append(dest)
         except Exception as exc:
             LOGGER.error(f"add_file_receiver download error: {exc}")
             failed += 1
@@ -192,11 +199,11 @@ async def add_file_receiver(event, bot):
     
     # Calculate summary statistics
     total_valid_lines = 0
-    if saved_files:
-        for file_path in saved_files:
-            total_valid_lines += _count_valid_lines(file_path)
+    if saved_file_paths:
+        for file_path in saved_file_paths:
+            total_valid_lines += await _async_count_valid_lines(file_path)
     
-    total_size = _calculate_total_size_mb(saved_files)
+    total_size = _calculate_total_size_mb(saved_file_paths)
     
     # Display enhanced summary in admin chat
     if failed == 0:
