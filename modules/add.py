@@ -8,8 +8,7 @@ from telethon import events
 
 import config
 from bot import ItsMrULPBot
-from helpers import LOGGER, edit_message, new_task, send_message
-from helpers.botutils import get_args_str
+from helpers import LOGGER, edit_message, new_task, send_message, get_all_users, increment_stat
 
 prefixes = "".join(re.escape(p) for p in config.COMMAND_PREFIXES)
 add_pattern = re.compile(rf"^[{prefixes}]add(?:\s+.*)?$", re.IGNORECASE)
@@ -23,6 +22,40 @@ def _is_authorized(user_id: int) -> bool:
     return user_id in _AUTHORIZED_IDS
 
 
+async def _notify_users_new_ulp(file_count: int):
+    """Notify all users about new ULP data added."""
+    users = get_all_users()
+    if not users:
+        return
+    
+    increment_stat("total_ulp_additions", 1)
+    
+    message = (
+        f"**🎉 New Fresh ULP Line Added! 📥**\n"
+        f"**━━━━━━━━━━━━━━━━**\n"
+        f"**New Database Files** : `{file_count}`\n"
+        f"**━━━━━━━━━━━━━━━━**\n"
+        f"**Try using /ulp command to search!**"
+    )
+    
+    success = 0
+    failed = 0
+    
+    for user_id in users:
+        try:
+            await ItsMrULPBot.send_message(user_id, message)
+            success += 1
+        except Exception as exc:
+            LOGGER.error(f"Failed to notify user {user_id}: {exc}")
+            failed += 1
+        
+        # Rate limiting
+        if (success + failed) % 5 == 0:
+            await asyncio.sleep(0.05)
+    
+    LOGGER.info(f"Notified {success} users about new ULP data (Failed: {failed})")
+
+
 @ItsMrULPBot.on(events.NewMessage(pattern=add_pattern))
 @new_task
 async def add_command_handler(event, bot):
@@ -31,6 +64,7 @@ async def add_command_handler(event, bot):
         return
 
     chat_id = event.chat_id
+    from helpers.botutils import get_args_str
     raw = get_args_str(event).strip()
 
     if not raw:
@@ -89,6 +123,7 @@ async def add_file_receiver(event, bot):
     data_dir.mkdir(exist_ok=True)
 
     failed = 0
+    saved_count = 0
     for file_event in collected_events:
         try:
             safe_name = re.sub(r'[^\w\-.]', '_', file_event.file.name or "db.txt")
@@ -101,6 +136,7 @@ async def add_file_receiver(event, bot):
                 counter += 1
             await file_event.download_media(file=dest)
             LOGGER.info(f"Database file saved: {Path(dest).name}")
+            saved_count += 1
         except Exception as exc:
             LOGGER.error(f"add_file_receiver download error: {exc}")
             failed += 1
@@ -114,3 +150,9 @@ async def add_file_receiver(event, bot):
             confirm_msg.id,
             f"**Done — {success} Saved, {failed} Failed**",
         )
+    
+    # Notify all users about new ULP data
+    if saved_count > 0:
+        await asyncio.sleep(1)
+        await _notify_users_new_ulp(saved_count)
+

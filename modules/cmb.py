@@ -54,6 +54,10 @@ def _build_channel_button():
 async def cmb_handler(event, bot):
     keyword = get_args_str(event).strip()
     chat_id = event.chat_id
+    sender = await event.get_sender()
+    
+    from helpers import add_user
+    add_user(sender.id)
 
     if not keyword:
         await send_message(chat_id, "**❌ Please Provide Keyword After The Command**")

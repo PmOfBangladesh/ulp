@@ -147,6 +147,10 @@ async def _do_extraction(
 @new_task
 async def extract_command_handler(event, bot):
     chat_id = event.chat_id
+    sender = await event.get_sender()
+    from helpers import add_user
+    add_user(sender.id)
+    
     keyword = get_args_str(event).strip() or None
     replied_file_path: Optional[str] = None
 

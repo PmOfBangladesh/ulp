@@ -38,6 +38,9 @@ async def ulp_handler(event, bot):
     chat_id = event.chat_id
     sender = await event.get_sender()
     user_id = sender.id
+    
+    from helpers import add_user
+    add_user(user_id)
 
     if not keyword:
         await send_message(chat_id, "**❌ Please Provide Keyword After The Command**")
