@@ -28,7 +28,7 @@ async def start_handler(event, bot):
     name = f"{first_name} {last_name}".strip() or "User"
     LOGGER.info(f"Start command | User: {name} ({sender.id})")
 
-    msg = await send_message(event.chat_id, "**Starting ItsMrULPBot ⚙️....**")
+    msg = await send_message(event.chat_id, "**Starting Aliya Ulp ⚙️....**")
     if not msg:
         return
     await asyncio.sleep(0.2)
@@ -38,7 +38,7 @@ async def start_handler(event, bot):
     text = (
         f"**Hi** {name} **Welcome To This Bot!**\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"**ItsMrULPBot ⚙️** is your ultimate ULP toolkit on Telegram — process files & more with ease!\n"
+        f"**Aliya Ulp ⚙️** is your ultimate ULP toolkit on Telegram — process files & more with ease!\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
         f"Don't forget to [join](https://{config.UPDATE_CHANNEL_URL}) for updates!"
     )

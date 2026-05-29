@@ -3,14 +3,14 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.backends.legacy:build"
 
 [project]
-name = "ItsMrULPBot"
+name = "AliyaUlpBot"
 version = "2.3.68"
 description = "A powerful async Telegram bot for searching, extracting and processing ULP databases"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.11"
 authors = [
-    { name = "ISmartCoder", url = "https://t.me/ISmartCoder" }
+    { name = "CodeNinjaXd", url = "https://t.me/CodeNinjaXd" }
 ]
 keywords = ["telegram", "bot", "telethon", "ulp", "combo"]
 classifiers = [
@@ -27,7 +27,7 @@ dependencies = [
 ]
 
 [project.scripts]
-ItsMrULPBot = "main:asyncio.run(run_bot())"
+AliyaUlpBot = "main:asyncio.run(run_bot())"
 
 [tool.setuptools.packages.find]
 where = ["."]
@@ -37,6 +37,6 @@ include = ["core*", "modules*", "helpers*", "utils*"]
 "*" = ["*.txt", "*.md"]
 
 [project.urls]
-"Homepage" = "https://t.me/abirxdhackz"
-"Bug Tracker" = "https://t.me/ISmartCoder"
-"Updates Channel" = "https://t.me/abirxdhackz"
+"Homepage" = "https://t.me/CodeNinjaXd"
+"Bug Tracker" = "https://t.me/CodeNinjaXd"
+"Updates Channel" = "https://t.me/NullError_XD"

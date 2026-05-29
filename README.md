@@ -1,4 +1,4 @@
-# ULP Telegram Bot (ItsMrULPBot)
+# Aliya Ulp Telegram Bot
 
 A fast, async Telegram bot for searching, extracting, and processing ULP (URL:Login:Password) databases. Built with Telethon + ripgrep for high‑volume text search, with admin tools for file management and broadcasts.
 
@@ -56,7 +56,7 @@ Edit `config.py` and fill in your values:
 API_ID = YOUR_API_ID
 API_HASH = 'YOUR_API_HASH'
 BOT_TOKEN = 'YOUR_BOT_TOKEN'
-UPDATE_CHANNEL_URL = 't.me/abirxdhackz'
+UPDATE_CHANNEL_URL = 't.me/NullError_XD'
 COMMAND_PREFIXES = ['/', '!', '.', ',', '$', '#']
 
 OWNER_ID = 123456789
@@ -183,7 +183,7 @@ Create a service file (adjust paths/user):
 ```bash
 sudo tee /etc/systemd/system/ulp-bot.service > /dev/null <<'SERVICE'
 [Unit]
-Description=ULP Telegram Bot
+Description=Aliya Ulp Telegram Bot
 After=network.target
 
 [Service]
@@ -238,6 +238,7 @@ python main.py
 
 ## Credits
 
+- Owner: **@CodeNinjaXd**
+- Updates channel: **@NullError_XD**
 - Main developer: **@ISmartCoder**
-- Updates channel: **@abirxdhackz**
 - Modified by: PmOfBangladesh

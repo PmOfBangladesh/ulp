@@ -1,9 +1,9 @@
-#Copyright @ISmartCoder
-#Updates Channel @abirxdhackz
+#Copyright @CodeNinjaXd
+#Updates Channel @NullError_XD
 API_ID = YOUR_API_ID
 API_HASH = 'YOUR_API_HASH'
 BOT_TOKEN = 'YOUR_BOT_TOKEN'
-UPDATE_CHANNEL_URL = 't.me/abirxdhackz'
+UPDATE_CHANNEL_URL = 't.me/NullError_XD'
 COMMAND_PREFIXES = ['/', '!', '.', ',', '$', '#']
 
 OWNER_ID = 7666341631

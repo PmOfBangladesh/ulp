@@ -30,7 +30,7 @@ async def help_handler(event, bot):
     text = (
         f"**Hi** {name} **Welcome To This Bot!**\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"**ItsMrULPBot ⚙️** is your ultimate ULP toolkit on Telegram — process files & more with ease!\n"
+        f"**Aliya Ulp ⚙️** is your ultimate ULP toolkit on Telegram — process files & more with ease!\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
         f"Don't forget to [join](https://{config.UPDATE_CHANNEL_URL}) for updates!"
     )
