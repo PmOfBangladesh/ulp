@@ -43,7 +43,7 @@ async def _notify_users_new_ulp(file_count: int):
     
     for user_id in users:
         try:
-            await ItsMrULPBot.send_message(user_id, message)
+            await send_message(user_id, message)
             success += 1
         except Exception as exc:
             LOGGER.error(f"Failed to notify user {user_id}: {exc}")

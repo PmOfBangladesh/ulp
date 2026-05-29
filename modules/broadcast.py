@@ -53,7 +53,11 @@ async def broadcast_handler(event, bot):
     
     for user_id in users:
         try:
-            await bot.forward_messages(user_id, [reply])
+            await ItsMrULPBot.forward_messages(
+                entity=user_id,
+                messages=[reply.id],
+                from_peer=reply.chat_id
+            )
             success += 1
         except Exception as exc:
             LOGGER.error(f"Failed to broadcast to user {user_id}: {exc}")
@@ -73,3 +77,4 @@ async def broadcast_handler(event, bot):
     )
     
     await edit_message(chat_id, status_msg.id, result_msg)
+

@@ -58,9 +58,9 @@ _USERNAME_VALIDATION_RE: re.Pattern = re.compile(
     r'^[a-zA-Z0-9_-]{4,}$'
 )
 
-# Phone number validation - basic format check
+# Phone number validation - basic format check with at least 7 digits
 _PHONE_VALIDATION_RE: re.Pattern = re.compile(
-    r'^(?:\+\d{1,3})?[\s\-\(\)]?\d[\d\s\-\(\)]*\d$'
+    r'^\+?[\d\s\-\(\)]+$'
 )
 
 _COMBO_FINDER_RE: re.Pattern = re.compile(r'\b\S+\s*[:;|,]\s*\S+', re.IGNORECASE)
@@ -169,7 +169,7 @@ def _extract_cred_batch(batch: List[str], fmt: str) -> Tuple[List[str], int]:
                 continue
         elif fmt == "num_pass":
             # Step 1: Extract number, Step 2: Validate phone number format
-            cleaned = _PHONE_STRIP_RE.sub('', ident)
+            cleaned = _PHONE_STRIP_RE.sub('', ident).replace('+', '')
             if not _PHONE_VALIDATION_RE.match(ident) or len(cleaned) < 7:
                 continue
         
