@@ -1,5 +1,6 @@
 import asyncio
 import re
+from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -38,6 +39,87 @@ def _categorize_combos(combos: List[Tuple[str, str, str]]) -> Dict[str, int]:
     for ctype, _, _ in combos:
         counts[ctype] = counts.get(ctype, 0) + 1
     return counts
+
+
+def _extract_domain(identifier: str) -> str:
+    """Extract domain from identifier (URL or email)."""
+    if identifier.startswith(('http://', 'https://', 'ftp://')):
+        # Extract domain from URL
+        match = re.match(r'https?://(?:www\.)?([^/:?#]+)', identifier)
+        if match:
+            return match.group(1)
+    elif '@' in identifier:
+        # Extract domain from email
+        return identifier.split('@')[1]
+    # For usernames or phone numbers, just return the identifier
+    return identifier
+
+
+def _group_combos_by_site(combos: List[Tuple[str, str, str]]) -> Dict[str, List[Tuple[str, str, str]]]:
+    """Group combos by site/domain."""
+    sites = defaultdict(list)
+    for combo in combos:
+        ctype, ident, pwd = combo
+        domain = _extract_domain(ident)
+        sites[domain].append(combo)
+    return dict(sites)
+
+
+def _build_full_summary(combos: List[Tuple[str, str, str]], elapsed_ms: float) -> str:
+    """Build full summary showing site breakdown."""
+    sites = _group_combos_by_site(combos)
+    counts = _categorize_combos(combos)
+    
+    # Sort sites by count descending
+    sorted_sites = sorted(sites.items(), key=lambda x: len(x[1]), reverse=True)
+    
+    lines = [
+        "**🔍 FULL DATABASE SUMMARY 📊**",
+        "**━━━━━━━━━━━━━━━━━━━━━━━━━━━**",
+        f"**Total Records**: `{len(combos)}`",
+        f"**📧 Email:Pass**: `{counts['email']}`",
+        f"**👤 User:Pass**: `{counts['user']}`",
+        f"**📱 Phone:Pass**: `{counts['phone']}`",
+        f"**🌐📧 URL+Email**: `{counts['url_email']}`",
+        f"**🌐👤 URL+User**: `{counts['url_user']}`",
+        f"**🌐📱 URL+Phone**: `{counts['url_phone']}`",
+        f"**⏱️ Scan Time**: `{elapsed_ms}ms`",
+        "**━━━━━━━━━━━━━━━━━━━━━━━━━━━**",
+        "",
+        "**📍 SITE BREAKDOWN:**",
+        "**━━━━━━━━━━━━━━━━━━━━━━━━━━━**",
+    ]
+    
+    # Add site information
+    for i, (site, site_combos) in enumerate(sorted_sites, 1):
+        lines.append(f"**{i}. {site} : Line {len(site_combos)}**")
+    
+    lines.extend([
+        "**━━━━━━━━━━━━━━━━━━━━━━━━━━━**",
+        "",
+        "**📋 RESULTS:**",
+        "**━━━━━━━━━━━━━━━━━━━━━━━━━━━**",
+    ])
+    
+    # Add all combos
+    for i, (ctype, ident, pwd) in enumerate(combos, 1):
+        ident_display = ident[:50] + "..." if len(ident) > 50 else ident
+        pwd_display = pwd[:30] + "..." if len(pwd) > 30 else pwd
+        
+        type_emoji = {
+            "email": "📧",
+            "user": "👤",
+            "phone": "📱",
+            "url_email": "🌐📧",
+            "url_user": "🌐👤",
+            "url_phone": "🌐📱",
+        }.get(ctype, "📝")
+        
+        lines.append(f"**{i}. {type_emoji} {ident_display}:{pwd_display}**")
+    
+    lines.append("**━━━━━━━━━━━━━━━━━━━━━━━━━━━**")
+    
+    return "\n".join(lines)
 
 
 def _build_summary_page(combos: List[Tuple[str, str, str]], page: int) -> str:
@@ -99,12 +181,13 @@ def _build_summary_header(combos: List[Tuple[str, str, str]], elapsed_ms: float)
 
 
 def _nav_buttons(page: int, total: int, cid: int):
-    """Create pagination buttons."""
+    """Create pagination buttons with Full Summary option."""
     row = []
     if page > 0:
         row.append(Button.inline("◀️ Previous", data=f"sumpg:prev:{cid}:{page}".encode()))
     if page < total - 1:
         row.append(Button.inline("Next ➡️", data=f"sumpg:next:{cid}:{page}".encode()))
+    row.append(Button.inline("📊 Full Summary", data=f"sumpg:full:{cid}".encode()))
     row.append(Button.inline("❌ Close", data=b"sumpg:close"))
     return [row] if row else None
 
@@ -160,7 +243,7 @@ async def summary_handler(event, bot):
 
 @ItsMrULPBot.on(events.CallbackQuery(data=re.compile(rb"^sumpg:")))
 async def summary_pagination_cb(event):
-    """Handle summary pagination."""
+    """Handle summary pagination and full summary."""
     sender = await event.get_sender()
     raw = event.data.decode()
     parts = raw.split(":")
@@ -168,6 +251,36 @@ async def summary_pagination_cb(event):
 
     if action == "close":
         await event.edit("**❌ Summary Closed**")
+        return
+
+    if action == "full":
+        chat_id = int(parts[2])
+        session = _sessions.get(chat_id)
+        if not session:
+            await event.answer("Session expired. Run /summary again.", alert=True)
+            return
+        
+        combos = session["combos"]
+        elapsed_ms = session["elapsed_ms"]
+        
+        # Build and display full summary
+        full_summary = _build_full_summary(combos, elapsed_ms)
+        
+        # Split into chunks if too long (Telegram limit is 4096 chars per message)
+        chunk_size = 4000
+        if len(full_summary) > chunk_size:
+            # Send first chunk
+            msg_id = event.query.msg_id
+            await ItsMrULPBot.edit_message(chat_id, msg_id, full_summary[:chunk_size], parse_mode="markdown")
+            
+            # Send remaining chunks
+            remaining = full_summary[chunk_size:]
+            while remaining:
+                chunk = remaining[:chunk_size]
+                await send_message(chat_id, chunk)
+                remaining = remaining[chunk_size:]
+        else:
+            await event.edit(full_summary, parse_mode="markdown")
         return
 
     if action not in ("prev", "next"):
