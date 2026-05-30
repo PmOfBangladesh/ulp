@@ -19,7 +19,8 @@ from helpers import (
     send_message,
 )
 from helpers.botutils import get_args_str
-from helpers.func import scan_db_for_mixed_combos, log_user_extraction, collect_datastore_paths
+from helpers.func import scan_db_for_mixed_combos, log_user_extraction
+from utils.engine import collect_datastore_paths
 
 prefixes = "".join(re.escape(p) for p in config.COMMAND_PREFIXES)
 _summary_pattern = re.compile(rf"^[{prefixes}]summary$", re.IGNORECASE)
@@ -33,7 +34,6 @@ def _get_db_stats(caller_file: str = None) -> Tuple[int, str, str]:
     try:
         # Use collect_datastore_paths if caller_file provided, else use default data dir
         if caller_file:
-            from utils.engine import collect_datastore_paths
             paths = collect_datastore_paths(caller_file)
         else:
             paths = list(Path("/tmp/workspace/PmOfBangladesh/ulp/data").glob("*.txt"))
