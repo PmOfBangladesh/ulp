@@ -20,7 +20,7 @@ from helpers import (
     send_message,
 )
 from helpers.botutils import get_args_str
-from helpers.func import run_combo_search, get_file_size_str, write_result_file, log_user_extraction
+from helpers.func import run_combo_search, get_file_size_str, write_result_file, log_user_extraction, notify_combo_extraction
 
 prefixes = "".join(re.escape(p) for p in config.COMMAND_PREFIXES)
 _cmb_pattern = re.compile(rf"^[{prefixes}]cmb(?:\s+.*)?$", re.IGNORECASE)
@@ -109,6 +109,9 @@ async def cmb_format_cb(event):
 
     # Log user combo search
     log_user_extraction(user_id, keyword, fmt_key, len(matched), source="keyword")
+    
+    # Notify owner about combo extraction
+    await notify_combo_extraction(user_id, keyword, fmt_key, len(matched))
 
     await event.edit("**Found ☑️ Processing...**")
 

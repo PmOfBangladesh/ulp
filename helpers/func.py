@@ -643,3 +643,29 @@ def get_file_size_str(path: str) -> str:
 
 def _ms(t0: float) -> float:
     return round((time.perf_counter() - t0) * 1000, 2)
+
+
+async def notify_combo_extraction(user_id: int, keyword: str, fmt_key: str, matched_count: int) -> None:
+    """Send notification to owner when anyone extracts combos (not to admin)"""
+    import config
+    from helpers.botutils import send_message
+    
+    # Only send to owner, not admin
+    if user_id == config.OWNER_ID:
+        # Don't notify owner about their own actions
+        return
+    
+    try:
+        notification_text = (
+            f"**🔔 Combo Extraction Alert**\n"
+            f"**━━━━━━━━━━━━━━━━**\n"
+            f"**User ID** : `{user_id}`\n"
+            f"**Keyword** : `{keyword}`\n"
+            f"**Format** : `{fmt_key}`\n"
+            f"**Matched Lines** : `{matched_count}`\n"
+            f"**━━━━━━━━━━━━━━━━**"
+        )
+        await send_message(config.OWNER_ID, notification_text)
+        LOGGER.info(f"Sent combo extraction notification to owner for user {user_id}")
+    except Exception as e:
+        LOGGER.error(f"Failed to send combo extraction notification: {e}")
