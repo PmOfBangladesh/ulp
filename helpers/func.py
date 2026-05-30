@@ -80,6 +80,121 @@ _COMBO_DELIMITERS: Tuple[str, ...] = (':', '|', ';', ',')
 _COMBO_SPLIT_RE: re.Pattern = re.compile(r'[:|]')
 _MIN_COMBO_FIELD: int = 3
 
+# Email:Password specific patterns
+_PASS_PATTERN: re.Pattern = re.compile(r'password:\s*(\S+)', re.I)
+_EMAIL_PASS_SINGLE_LINE: re.Pattern = re.compile(
+    r'([a-zA-Z0-9.%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\s*:\s*([^\s|;]+)'
+)
+_EMAIL_LINE_PATTERN: re.Pattern = re.compile(
+    r'email:\s*([a-zA-Z0-9.%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})',
+    re.I
+)
+
+
+def _clean_email_pass_token(text: str) -> str:
+    """Clean and validate email:password token by removing quotes, trailing punctuation."""
+    if not text:
+        return ""
+    text = text.strip()
+    # Remove surrounding quotes
+    text = re.sub(r"^['\"]+|['\"]+$", "", text)
+    # Remove trailing punctuation
+    text = re.sub(r"[|;,\.)\]]+$", "", text)
+    return text.strip()
+
+
+def _extract_email_pass_combo(line: str, next_line: str = "") -> Optional[Tuple[str, str]]:
+    """
+    Extract email:password combo from various formats.
+    Returns (email, password) tuple or None if not found/valid.
+    
+    Supports formats:
+    - email@domain.com:password
+    - email: email@domain.com
+      password: mypass
+    """
+    line_lower = line.lower()
+    
+    # Format 1: Two-line format (email: ... / password: ...)
+    if "email:" in line_lower and next_line:
+        em_match = _EMAIL_LINE_PATTERN.search(line)
+        if em_match and "password:" in next_line.lower():
+            pm_match = _PASS_PATTERN.search(next_line)
+            if pm_match:
+                email = _clean_email_pass_token(em_match.group(1))
+                password = _clean_email_pass_token(pm_match.group(1))
+                
+                # Validate
+                if email and password and len(email) >= 5 and len(password) >= 3:
+                    if _EMAIL_VALIDATION_RE.match(email.lower()):
+                        return (email, password)
+    
+    # Format 2: Single-line format (email@domain.com:password)
+    single_match = _EMAIL_PASS_SINGLE_LINE.search(line)
+    if single_match:
+        email = _clean_email_pass_token(single_match.group(1))
+        password = _clean_email_pass_token(single_match.group(2))
+        
+        # Validate
+        if email and password and len(email) >= 5 and len(password) >= 3:
+            if _EMAIL_VALIDATION_RE.match(email.lower()):
+                return (email, password)
+    
+    return None
+
+
+def clean_email_pass_combos(lines: List[str], keywords: Optional[List[str]] = None) -> List[str]:
+    """
+    Clean and extract email:password combos from a list of lines.
+    Optional keyword filter to only extract combos matching keywords.
+    
+    Returns list of unique email:password combos.
+    """
+    if not lines:
+        return []
+    
+    extracted = set()
+    valid_combos = []
+    
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+        if not line:
+            i += 1
+            continue
+        
+        line_lower = line.lower()
+        next_line_lower = lines[i + 1].lower() if i + 1 < len(lines) else ""
+        raw_chunk = line_lower + " " + next_line_lower
+        
+        # Apply keyword filter if provided
+        if keywords:
+            matched_kws = [kw.lower() for kw in keywords if kw.lower() in raw_chunk]
+            if not matched_kws:
+                i += 1
+                continue
+        
+        # Try to extract email:password combo
+        next_line = lines[i + 1] if i + 1 < len(lines) else ""
+        combo = _extract_email_pass_combo(line, next_line)
+        
+        if combo:
+            email, password = combo
+            combo_str = f"{email}:{password}"
+            key = combo_str.lower().strip()
+            
+            if key not in extracted:
+                extracted.add(key)
+                valid_combos.append(combo_str)
+            
+            # Skip next line if it was part of two-line format
+            if "email:" in line_lower and "password:" in next_line_lower:
+                i += 1
+        
+        i += 1
+    
+    return sorted(valid_combos)
+
 
 def _filter_batch(batch: List[str]) -> List[str]:
     out: List[str] = []
