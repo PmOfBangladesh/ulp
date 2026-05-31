@@ -6,6 +6,7 @@ import time
 from collections import Counter
 from pathlib import Path
 from typing import Dict, List, Tuple
+from urllib.parse import urlparse
 
 from telethon import events
 
@@ -22,13 +23,14 @@ from utils.engine import collect_datastore_paths
 
 prefixes = "".join(re.escape(p) for p in config.COMMAND_PREFIXES)
 _summary_pattern = re.compile(rf"^[{prefixes}]summary$", re.IGNORECASE)
+CREDENTIAL_SEPARATORS = r'[:;|]'  # Regex pattern for credential separators in plain formats
 
 
 def _extract_domain(identifier: str) -> str:
     """Extract domain from identifier (URL or email)."""
     if identifier.startswith(('http://', 'https://', 'ftp://')):
-        # Extract domain from URL
-        match = re.match(r'https?://(?:www\.)?([^/:?#]+)', identifier)
+        # Extract domain from URL (supports HTTP, HTTPS, and FTP)
+        match = re.match(r'(?:https?|ftp)://(?:www\.)?([^/:?#]+)', identifier)
         if match:
             return match.group(1)
     elif '@' in identifier:
@@ -98,6 +100,67 @@ def _get_db_stats(total_lines: int = None) -> Tuple[int, str, str]:
         return total_lines or 0, "0 B", "0 B"
 
 
+def _extract_identifier(line: str) -> str:
+    """Extract identifier (URL, email, or domain) from a database line.
+    
+    Handles formats:
+    - url:user:pass (URL with colon separator)
+    - url|user|pass (URL with pipe separator)
+    - domain:user:pass (plain domain with colon separator)
+    - domain;user;pass (plain domain with semicolon separator)
+    - email:user:pass (email format with colon separator)
+    - email;user;pass (email format with semicolon separator)
+    
+    Note: Semicolon is only supported as a separator for non-URL formats.
+    For URLs, only colon (for ports) and pipe (for credentials) are recognized.
+    """
+    # Check if line starts with a URL protocol
+    if line.startswith(('http://', 'https://', 'ftp://')):
+        # Find the position after the protocol (after ://)
+        protocol_end = line.find('://')
+        if protocol_end < 0:
+            # Defensive check (shouldn't happen if startswith check passed)
+            return line.strip()
+        protocol_end += 3
+        
+        # Find the first credential separator (: or |) after the protocol
+        # Note: semicolon is not supported for URL formats
+        colon_idx = line.find(':', protocol_end)
+        pipe_idx = line.find('|', protocol_end)
+        
+        # Determine which separator comes first (or -1 if not found)
+        if colon_idx >= 0 and pipe_idx >= 0:
+            cred_sep_idx = min(colon_idx, pipe_idx)
+        elif colon_idx >= 0:
+            cred_sep_idx = colon_idx
+        elif pipe_idx >= 0:
+            cred_sep_idx = pipe_idx
+        else:
+            cred_sep_idx = -1
+        
+        if cred_sep_idx > protocol_end:
+            url_part = line[:cred_sep_idx]
+        else:
+            url_part = line
+        
+        # Parse the URL to extract the network location (netloc includes domain:port)
+        try:
+            parsed = urlparse(url_part)
+            if parsed.netloc:
+                return f"{parsed.scheme}://{parsed.netloc}"
+        except Exception:
+            # Catch any unexpected errors from urlparse (though it rarely raises)
+            pass
+        
+        # Fallback: return the URL part as-is if parsing fails
+        return url_part
+    
+    # Not a URL, use standard split for email or domain
+    # Split on first occurrence of : ; or | to separate identifier from credentials
+    parts = re.split(CREDENTIAL_SEPARATORS, line, maxsplit=1)
+    return parts[0].strip() if parts else line.strip()
+
+
 async def _scan_and_count_domains() -> Tuple[Counter, int]:
     """
     Scan database files in streaming mode and count domains.
@@ -120,15 +183,15 @@ async def _scan_and_count_domains() -> Tuple[Counter, int]:
                             
                             total_lines += 1
                             
-                            # Extract domain from the line
-                            # Format: domain:user:pass or url|user|pass or email:user:pass
-                            parts = re.split(r'[:;|]', line, maxsplit=2)
-                            if len(parts) >= 2:
-                                identifier = parts[0].strip()
-                                if identifier:
-                                    # Extract domain from identifier (handles URLs, emails, or plain domains)
-                                    domain = _extract_domain(identifier)
-                                    domain_counter[domain] += 1
+                            # Extract identifier from the line (handles URLs, emails, domains)
+                            identifier = _extract_identifier(line)
+                            if not identifier:
+                                continue
+                            
+                            # Extract domain from identifier
+                            domain = _extract_domain(identifier)
+                            if domain:
+                                domain_counter[domain] += 1
                 except Exception as e:
                     LOGGER.error(f"Error reading {path}: {e}")
                     continue
