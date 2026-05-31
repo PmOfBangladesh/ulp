@@ -116,7 +116,7 @@ async def _scan_and_count_domains() -> Tuple[Counter, int]:
                         
                         # Extract domain from the line
                         # Format: domain:user:pass or url|user|pass etc
-                        parts = re.split(r'[:|\;]', line, maxsplit=2)
+                        parts = re.split(r'[:|;]', line, maxsplit=2)
                         if len(parts) >= 2:
                             identifier = parts[0].strip()
                             if identifier:
@@ -144,7 +144,7 @@ def _build_top_20_domains_output(domain_counter: Counter, total_lines: int, db_s
     
     lines.extend([
         "",
-        f"**Total Valid Line**: {total_lines:,}",
+        f"**Total Valid Lines**: {total_lines:,}",
         f"**Total DB size**: {db_size}",
         f"**Free size**: {free_size}",
     ])
