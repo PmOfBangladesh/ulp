@@ -121,11 +121,12 @@ async def _scan_and_count_domains() -> Tuple[Counter, int]:
                             total_lines += 1
                             
                             # Extract domain from the line
-                            # Format: domain:user:pass or url|user|pass etc
+                            # Format: domain:user:pass or url|user|pass or email:user:pass
                             parts = re.split(r'[:;|]', line, maxsplit=2)
                             if len(parts) >= 2:
                                 identifier = parts[0].strip()
                                 if identifier:
+                                    # Extract domain from identifier (handles URLs, emails, or plain domains)
                                     domain = _extract_domain(identifier)
                                     domain_counter[domain] += 1
                 except Exception as e:
@@ -198,8 +199,8 @@ async def summary_handler(event, bot):
         await edit_message(chat_id, msg.id, "**❌ No Domains Found In Database**")
         return
 
-    # Log the summary scan
-    log_user_extraction(user_id, None, "SUMMARY", len(domain_counter), source="database_scan")
+    # Log the summary scan (using total_lines to reflect actual database entries scanned)
+    log_user_extraction(user_id, None, "SUMMARY", total_lines, source="database_scan")
 
     # Build and display top 20 domains
     output = _build_top_20_domains_output(domain_counter, total_lines, db_size, free_size)
