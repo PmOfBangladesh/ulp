@@ -98,6 +98,32 @@ def _get_db_stats(total_lines: int = None) -> Tuple[int, str, str]:
         return total_lines or 0, "0 B", "0 B"
 
 
+def _extract_identifier(line: str) -> str:
+    """Extract identifier (URL, email, or domain) from a database line.
+    
+    Handles formats:
+    - domain:user:pass (plain domain)
+    - url|user|pass (URL with pipe separator)
+    - email:user:pass (email format)
+    - url:user:pass (URL with colon separator)
+    """
+    # Check if line starts with a URL protocol
+    if line.startswith(('http://', 'https://', 'ftp://')):
+        # Extract URL up to the first credential separator (: or |)
+        # Pattern: protocol://domain[:port][/path]
+        match = re.match(r'((?:https?|ftp)://(?:www\.)?[^/:?#|]+(?::\d+)?(?:/[^/:?#|]*)?)(?:[:|]|$)', line)
+        if match:
+            return match.group(1)
+    
+    # Not a URL, use standard split for email or domain
+    # Split on first occurrence of : or | to separate identifier from credentials
+    parts = re.split(r'[:;|]', line, maxsplit=1)
+    if len(parts) >= 1:
+        return parts[0].strip()
+    
+    return line.strip()
+
+
 async def _scan_and_count_domains() -> Tuple[Counter, int]:
     """
     Scan database files in streaming mode and count domains.
@@ -120,14 +146,12 @@ async def _scan_and_count_domains() -> Tuple[Counter, int]:
                             
                             total_lines += 1
                             
-                            # Extract domain from the line
-                            # Format: domain:user:pass or url|user|pass or email:user:pass
-                            parts = re.split(r'[:;|]', line, maxsplit=2)
-                            if len(parts) >= 2:
-                                identifier = parts[0].strip()
-                                if identifier:
-                                    # Extract domain from identifier (handles URLs, emails, or plain domains)
-                                    domain = _extract_domain(identifier)
+                            # Extract identifier from the line (handles URLs, emails, domains)
+                            identifier = _extract_identifier(line)
+                            if identifier:
+                                # Extract domain from identifier
+                                domain = _extract_domain(identifier)
+                                if domain:
                                     domain_counter[domain] += 1
                 except Exception as e:
                     LOGGER.error(f"Error reading {path}: {e}")
