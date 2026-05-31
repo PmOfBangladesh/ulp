@@ -110,16 +110,17 @@ def _extract_identifier(line: str) -> str:
     """
     # Check if line starts with a URL protocol
     if line.startswith(('http://', 'https://', 'ftp://')):
+        # Find the position after the protocol (after ://)
+        protocol_end = line.find('://') + 3
+        
         # Find the first credential separator (: or |) after the protocol
-        # This separates the URL part from the credentials
         cred_sep_idx = -1
-        for i, char in enumerate(line):
-            # Skip the protocol part (find the first : after ://)
-            if i > 10 and char in ':|':  # 10 is roughly after the protocol
+        for i in range(protocol_end, len(line)):
+            if line[i] in ':|':
                 cred_sep_idx = i
                 break
         
-        if cred_sep_idx > 0:
+        if cred_sep_idx > protocol_end:
             url_part = line[:cred_sep_idx]
         else:
             url_part = line
@@ -129,7 +130,8 @@ def _extract_identifier(line: str) -> str:
             parsed = urlparse(url_part)
             if parsed.netloc:
                 return f"{parsed.scheme}://{parsed.netloc}"
-        except Exception:
+        except ValueError:
+            # urlparse raises ValueError for invalid URLs
             pass
         
         # Fallback: return the URL part as-is if parsing fails
