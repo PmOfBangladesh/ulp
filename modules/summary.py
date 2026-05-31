@@ -6,6 +6,7 @@ import time
 from collections import Counter
 from pathlib import Path
 from typing import Dict, List, Tuple
+from urllib.parse import urlparse
 
 from telethon import events
 
@@ -109,19 +110,35 @@ def _extract_identifier(line: str) -> str:
     """
     # Check if line starts with a URL protocol
     if line.startswith(('http://', 'https://', 'ftp://')):
-        # Extract URL up to the first credential separator (: or |)
-        # Pattern: protocol://domain[:port][/path]
-        match = re.match(r'((?:https?|ftp)://(?:www\.)?[^/:?#|]+(?::\d+)?(?:/[^/:?#|]*)?)(?:[:|]|$)', line)
-        if match:
-            return match.group(1)
+        # Find the first credential separator (: or |) after the protocol
+        # This separates the URL part from the credentials
+        cred_sep_idx = -1
+        for i, char in enumerate(line):
+            # Skip the protocol part (find the first : after ://)
+            if i > 10 and char in ':|':  # 10 is roughly after the protocol
+                cred_sep_idx = i
+                break
+        
+        if cred_sep_idx > 0:
+            url_part = line[:cred_sep_idx]
+        else:
+            url_part = line
+        
+        # Parse the URL to extract the network location (netloc includes domain:port)
+        try:
+            parsed = urlparse(url_part)
+            if parsed.netloc:
+                return f"{parsed.scheme}://{parsed.netloc}"
+        except Exception:
+            pass
+        
+        # Fallback: return the URL part as-is if parsing fails
+        return url_part
     
     # Not a URL, use standard split for email or domain
     # Split on first occurrence of : or | to separate identifier from credentials
     parts = re.split(r'[:;|]', line, maxsplit=1)
-    if len(parts) >= 1:
-        return parts[0].strip()
-    
-    return line.strip()
+    return parts[0].strip() if parts else line.strip()
 
 
 async def _scan_and_count_domains() -> Tuple[Counter, int]:
@@ -148,11 +165,13 @@ async def _scan_and_count_domains() -> Tuple[Counter, int]:
                             
                             # Extract identifier from the line (handles URLs, emails, domains)
                             identifier = _extract_identifier(line)
-                            if identifier:
-                                # Extract domain from identifier
-                                domain = _extract_domain(identifier)
-                                if domain:
-                                    domain_counter[domain] += 1
+                            if not identifier:
+                                continue
+                            
+                            # Extract domain from identifier
+                            domain = _extract_domain(identifier)
+                            if domain:
+                                domain_counter[domain] += 1
                 except Exception as e:
                     LOGGER.error(f"Error reading {path}: {e}")
                     continue
