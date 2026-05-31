@@ -27,8 +27,8 @@ _summary_pattern = re.compile(rf"^[{prefixes}]summary$", re.IGNORECASE)
 def _extract_domain(identifier: str) -> str:
     """Extract domain from identifier (URL or email)."""
     if identifier.startswith(('http://', 'https://', 'ftp://')):
-        # Extract domain from URL
-        match = re.match(r'https?://(?:www\.)?([^/:?#]+)', identifier)
+        # Extract domain from URL (supports http, https, and ftp)
+        match = re.match(r'(?:https?|ftp)://(?:www\.)?([^/:?#]+)', identifier)
         if match:
             return match.group(1)
     elif '@' in identifier:
