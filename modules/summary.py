@@ -23,6 +23,7 @@ from utils.engine import collect_datastore_paths
 
 prefixes = "".join(re.escape(p) for p in config.COMMAND_PREFIXES)
 _summary_pattern = re.compile(rf"^[{prefixes}]summary$", re.IGNORECASE)
+_CREDENTIAL_SEPARATORS = r'[:;|]'  # Regex pattern for credential separators
 
 
 def _extract_domain(identifier: str) -> str:
@@ -113,7 +114,11 @@ def _extract_identifier(line: str) -> str:
     # Check if line starts with a URL protocol
     if line.startswith(('http://', 'https://', 'ftp://')):
         # Find the position after the protocol (after ://)
-        protocol_end = line.find('://') + 3
+        protocol_end = line.find('://')
+        if protocol_end < 0:
+            # Defensive check (shouldn't happen if startswith check passed)
+            return line.strip()
+        protocol_end += 3
         
         # Find the first credential separator (: or |) after the protocol
         colon_idx = line.find(':', protocol_end)
@@ -148,7 +153,7 @@ def _extract_identifier(line: str) -> str:
     
     # Not a URL, use standard split for email or domain
     # Split on first occurrence of : or | to separate identifier from credentials
-    parts = re.split(r'[:;|]', line, maxsplit=1)
+    parts = re.split(_CREDENTIAL_SEPARATORS, line, maxsplit=1)
     return parts[0].strip() if parts else line.strip()
 
 
