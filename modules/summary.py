@@ -240,6 +240,17 @@ def _nav_buttons(page: int, total: int, cid: int):
     return [row] if row else None
 
 
+async def _cleanup_session_after_delay(chat_id: int, delay: int):
+    """Clean up session data after specified delay to free memory."""
+    try:
+        await asyncio.sleep(delay)
+        if chat_id in _sessions:
+            del _sessions[chat_id]
+            LOGGER.info(f"Cleaned up summary session for chat {chat_id}")
+    except Exception as e:
+        LOGGER.error(f"Error cleaning up session: {e}")
+
+
 @ItsMrULPBot.on(events.NewMessage(pattern=_summary_pattern))
 @new_task
 async def summary_handler(event, bot):
@@ -256,7 +267,8 @@ async def summary_handler(event, bot):
         return
 
     try:
-        combos, removed, elapsed_ms = await scan_db_for_mixed_combos(__file__)
+        # Use streaming mode with reduced max_results for display (1000 combos max)
+        combos, removed, elapsed_ms = await scan_db_for_mixed_combos(__file__, max_results=1000, use_streaming=True)
     except Exception as exc:
         LOGGER.error(f"summary_handler error: {exc}")
         await edit_message(chat_id, msg.id, "**❌ Error Scanning Database**")
@@ -271,11 +283,14 @@ async def summary_handler(event, bot):
 
     # Calculate pagination
     total_pages = max(1, (len(combos) + _LINES_PER_PAGE - 1) // _LINES_PER_PAGE)
+    # Store session data with auto-cleanup time
+    cleanup_time = time.time() + 3600  # Auto-cleanup after 1 hour
     _sessions[chat_id] = {
         "combos": combos,
         "total_pages": total_pages,
         "removed": removed,
         "elapsed_ms": elapsed_ms,
+        "cleanup_time": cleanup_time,
     }
 
     # Show header first
@@ -287,6 +302,9 @@ async def summary_handler(event, bot):
     page_text = _build_summary_page(combos, 0)
     btns = _nav_buttons(0, total_pages, chat_id)
     await edit_message(chat_id, msg.id, page_text, buttons=btns)
+    
+    # Clear session after 1 hour to free memory
+    asyncio.create_task(_cleanup_session_after_delay(chat_id, 3600))
 
 
 @ItsMrULPBot.on(events.CallbackQuery(data=re.compile(rb"^sumpg:")))
