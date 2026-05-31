@@ -5,8 +5,8 @@ from pathlib import Path
 from typing import Set, Dict, Any
 from helpers.logger import LOGGER
 
-_USER_DB_FILE = Path(__file__).resolve().parent.parent / "data" / ".userdb.json"
-_STATS_FILE = Path(__file__).resolve().parent.parent / "data" / ".stats.json"
+_USER_DB_FILE = Path(__file__).resolve().parent.parent / ".userdb.json"
+_STATS_FILE = Path(__file__).resolve().parent.parent / ".stats.json"
 
 # In-memory cache
 _user_cache: Set[int] = set()
@@ -18,16 +18,10 @@ _stats_cache: Dict[str, Any] = {
 }
 
 
-def _ensure_data_dir():
-    """Ensure data directory exists."""
-    data_dir = _USER_DB_FILE.parent
-    data_dir.mkdir(parents=True, exist_ok=True)
-
 
 def load_users() -> Set[int]:
     """Load user IDs from database."""
     global _user_cache
-    _ensure_data_dir()
     
     if not _USER_DB_FILE.exists():
         _user_cache = set()
@@ -46,7 +40,6 @@ def load_users() -> Set[int]:
 
 def save_users():
     """Save user IDs to database."""
-    _ensure_data_dir()
     try:
         with open(_USER_DB_FILE, 'w', encoding='utf-8') as f:
             json.dump({'users': list(_user_cache)}, f)
@@ -73,7 +66,6 @@ def get_all_users() -> Set[int]:
 def load_stats() -> Dict[str, Any]:
     """Load statistics from database."""
     global _stats_cache
-    _ensure_data_dir()
     
     if not _STATS_FILE.exists():
         _stats_cache = {
@@ -101,7 +93,6 @@ def load_stats() -> Dict[str, Any]:
 
 def save_stats():
     """Save statistics to database."""
-    _ensure_data_dir()
     try:
         with open(_STATS_FILE, 'w', encoding='utf-8') as f:
             json.dump(_stats_cache, f)

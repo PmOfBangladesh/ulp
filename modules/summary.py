@@ -1,5 +1,7 @@
 import asyncio
+import os
 import re
+import time
 from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Tuple
@@ -18,12 +20,80 @@ from helpers import (
 )
 from helpers.botutils import get_args_str
 from helpers.func import scan_db_for_mixed_combos, log_user_extraction
+from utils.engine import collect_datastore_paths
 
 prefixes = "".join(re.escape(p) for p in config.COMMAND_PREFIXES)
 _summary_pattern = re.compile(rf"^[{prefixes}]summary$", re.IGNORECASE)
 
 _LINES_PER_PAGE: int = 38
 _sessions: Dict[int, Dict] = {}
+
+
+def _get_db_stats(caller_file: str = None) -> Tuple[int, str, str]:
+    """Get total lines, size, and last update from database files."""
+    try:
+        # Use collect_datastore_paths if caller_file provided, else use default data dir
+        if caller_file:
+            paths = collect_datastore_paths(caller_file)
+        else:
+            paths = list(Path("/tmp/workspace/PmOfBangladesh/ulp/data").glob("*.txt"))
+        
+        if not paths:
+            return 0, "0 B", "Unknown"
+        
+        total_lines = 0
+        total_size = 0
+        latest_mtime = 0
+        
+        for path in paths:
+            try:
+                # Count lines
+                with open(path, 'r', encoding='utf-8', errors='replace') as f:
+                    total_lines += sum(1 for _ in f)
+                
+                # Get size
+                total_size += os.path.getsize(path)
+                
+                # Get modification time
+                mtime = os.path.getmtime(path)
+                latest_mtime = max(latest_mtime, mtime)
+            except Exception as e:
+                LOGGER.error(f"Error reading {path}: {e}")
+                continue
+        
+        # Format size
+        if total_size < 1024:
+            size_str = f"{total_size} B"
+        elif total_size < 1024 * 1024:
+            size_str = f"{total_size / 1024:.2f} KB"
+        elif total_size < 1024 * 1024 * 1024:
+            size_str = f"{total_size / (1024 * 1024):.2f} MB"
+        else:
+            size_str = f"{total_size / (1024 * 1024 * 1024):.2f} GB"
+        
+        # Format last update time
+        if latest_mtime:
+            diff = time.time() - latest_mtime
+            hours = int(diff / 3600)
+            if hours < 1:
+                update_str = "Less than 1 hour ago"
+            elif hours == 1:
+                update_str = "1 hour ago"
+            elif hours < 24:
+                update_str = f"{hours} hours ago"
+            else:
+                days = hours // 24
+                if days == 1:
+                    update_str = "1 day ago"
+                else:
+                    update_str = f"{days} days ago"
+        else:
+            update_str = "Unknown"
+        
+        return total_lines, size_str, update_str
+    except Exception as e:
+        LOGGER.error(f"Error getting DB stats: {e}")
+        return 0, "0 B", "Unknown"
 
 
 def _categorize_combos(combos: List[Tuple[str, str, str]]) -> Dict[str, int]:
@@ -65,59 +135,37 @@ def _group_combos_by_site(combos: List[Tuple[str, str, str]]) -> Dict[str, List[
     return dict(sites)
 
 
-def _build_full_summary(combos: List[Tuple[str, str, str]], elapsed_ms: float) -> str:
-    """Build full summary showing site breakdown."""
-    sites = _group_combos_by_site(combos)
-    counts = _categorize_combos(combos)
+def _build_top_20_domains(combos: List[Tuple[str, str, str]], caller_file: str = None) -> str:
+    """Build top 20 domains summary."""
+    # Group by domain
+    sites = defaultdict(int)
+    for ctype, ident, pwd in combos:
+        domain = _extract_domain(ident)
+        sites[domain] += 1
     
-    # Sort sites by count descending
-    sorted_sites = sorted(sites.items(), key=lambda x: len(x[1]), reverse=True)
+    # Sort by count descending and get top 20
+    sorted_sites = sorted(sites.items(), key=lambda x: x[1], reverse=True)[:20]
+    
+    # Get database stats
+    total_lines, size_str, update_str = _get_db_stats(caller_file)
     
     lines = [
-        "**🔍 FULL DATABASE SUMMARY 📊**",
-        "**━━━━━━━━━━━━━━━━━━━━━━━━━━━**",
-        f"**Total Records**: `{len(combos)}`",
-        f"**📧 Email:Pass**: `{counts['email']}`",
-        f"**👤 User:Pass**: `{counts['user']}`",
-        f"**📱 Phone:Pass**: `{counts['phone']}`",
-        f"**🌐📧 URL+Email**: `{counts['url_email']}`",
-        f"**🌐👤 URL+User**: `{counts['url_user']}`",
-        f"**🌐📱 URL+Phone**: `{counts['url_phone']}`",
-        f"**⏱️ Scan Time**: `{elapsed_ms}ms`",
-        "**━━━━━━━━━━━━━━━━━━━━━━━━━━━**",
-        "",
-        "**📍 SITE BREAKDOWN:**",
+        "**🌐 Top 20 Domains**",
         "**━━━━━━━━━━━━━━━━━━━━━━━━━━━**",
     ]
     
-    # Add site information
-    for i, (site, site_combos) in enumerate(sorted_sites, 1):
-        lines.append(f"**{i}. {site} : Line {len(site_combos)}**")
+    # Add top 20 domains
+    for i, (domain, count) in enumerate(sorted_sites, 1):
+        # Format count with commas
+        count_str = f"{count:,}"
+        lines.append(f"**{i}. {domain} — {count_str}**")
     
     lines.extend([
         "**━━━━━━━━━━━━━━━━━━━━━━━━━━━**",
-        "",
-        "**📋 RESULTS:**",
-        "**━━━━━━━━━━━━━━━━━━━━━━━━━━━**",
+        f"**Total Lines: {total_lines:,}**",
+        f"**Total Size: {size_str}**",
+        f"**Last Update: {update_str}**",
     ])
-    
-    # Add all combos
-    for i, (ctype, ident, pwd) in enumerate(combos, 1):
-        ident_display = ident[:50] + "..." if len(ident) > 50 else ident
-        pwd_display = pwd[:30] + "..." if len(pwd) > 30 else pwd
-        
-        type_emoji = {
-            "email": "📧",
-            "user": "👤",
-            "phone": "📱",
-            "url_email": "🌐📧",
-            "url_user": "🌐👤",
-            "url_phone": "🌐📱",
-        }.get(ctype, "📝")
-        
-        lines.append(f"**{i}. {type_emoji} {ident_display}:{pwd_display}**")
-    
-    lines.append("**━━━━━━━━━━━━━━━━━━━━━━━━━━━**")
     
     return "\n".join(lines)
 
@@ -181,13 +229,13 @@ def _build_summary_header(combos: List[Tuple[str, str, str]], elapsed_ms: float)
 
 
 def _nav_buttons(page: int, total: int, cid: int):
-    """Create pagination buttons with Full Summary option."""
+    """Create pagination buttons with Top 20 Domains option."""
     row = []
     if page > 0:
         row.append(Button.inline("◀️ Previous", data=f"sumpg:prev:{cid}:{page}".encode()))
     if page < total - 1:
         row.append(Button.inline("Next ➡️", data=f"sumpg:next:{cid}:{page}".encode()))
-    row.append(Button.inline("📊 Full Summary", data=f"sumpg:full:{cid}".encode()))
+    row.append(Button.inline("🌐 Top 20 Domains", data=f"sumpg:full:{cid}".encode()))
     row.append(Button.inline("❌ Close", data=b"sumpg:close"))
     return [row] if row else None
 
@@ -243,7 +291,7 @@ async def summary_handler(event, bot):
 
 @ItsMrULPBot.on(events.CallbackQuery(data=re.compile(rb"^sumpg:")))
 async def summary_pagination_cb(event):
-    """Handle summary pagination and full summary."""
+    """Handle summary pagination and top 20 domains display."""
     sender = await event.get_sender()
     raw = event.data.decode()
     parts = raw.split(":")
@@ -261,26 +309,10 @@ async def summary_pagination_cb(event):
             return
         
         combos = session["combos"]
-        elapsed_ms = session["elapsed_ms"]
         
-        # Build and display full summary
-        full_summary = _build_full_summary(combos, elapsed_ms)
-        
-        # Split into chunks if too long (Telegram limit is 4096 chars per message)
-        chunk_size = 4000
-        if len(full_summary) > chunk_size:
-            # Send first chunk
-            msg_id = event.query.msg_id
-            await ItsMrULPBot.edit_message(chat_id, msg_id, full_summary[:chunk_size], parse_mode="markdown")
-            
-            # Send remaining chunks
-            remaining = full_summary[chunk_size:]
-            while remaining:
-                chunk = remaining[:chunk_size]
-                await send_message(chat_id, chunk)
-                remaining = remaining[chunk_size:]
-        else:
-            await event.edit(full_summary, parse_mode="markdown")
+        # Build and display top 20 domains
+        top_20 = _build_top_20_domains(combos, __file__)
+        await event.edit(top_20, parse_mode="markdown")
         return
 
     if action not in ("prev", "next"):
