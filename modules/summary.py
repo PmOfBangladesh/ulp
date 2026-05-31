@@ -38,28 +38,33 @@ def _extract_domain(identifier: str) -> str:
     return identifier
 
 
-def _get_db_stats() -> Tuple[int, str, str]:
-    """Get total lines, total size, and free disk space."""
+def _get_db_stats(total_lines: int = None) -> Tuple[int, str, str]:
+    """Get total lines, total size, and free disk space.
+    If total_lines is provided, it will be used instead of recounting."""
     try:
         paths = list(Path("/tmp/workspace/PmOfBangladesh/ulp/data").glob("*.txt"))
         
         if not paths:
-            return 0, "0 B", "0 B"
+            return total_lines or 0, "0 B", "0 B"
         
-        total_lines = 0
         total_size = 0
+        counted_lines = 0
         
         for path in paths:
             try:
-                # Count lines efficiently
-                with open(path, 'r', encoding='utf-8', errors='replace') as f:
-                    total_lines += sum(1 for _ in f)
+                # Count lines only if not provided
+                if total_lines is None:
+                    with open(path, 'r', encoding='utf-8', errors='replace') as f:
+                        counted_lines += sum(1 for _ in f)
                 
                 # Get size
                 total_size += os.path.getsize(path)
             except Exception as e:
                 LOGGER.error(f"Error reading {path}: {e}")
                 continue
+        
+        # Use provided total_lines if available, otherwise use counted lines
+        final_lines = total_lines if total_lines is not None else counted_lines
         
         # Format total size
         if total_size < 1024:
@@ -87,49 +92,54 @@ def _get_db_stats() -> Tuple[int, str, str]:
             LOGGER.error(f"Error getting disk space: {e}")
             free_str = "Unknown"
         
-        return total_lines, size_str, free_str
+        return final_lines, size_str, free_str
     except Exception as e:
         LOGGER.error(f"Error getting DB stats: {e}")
-        return 0, "0 B", "0 B"
+        return total_lines or 0, "0 B", "0 B"
 
 
 async def _scan_and_count_domains() -> Tuple[Counter, int]:
     """
     Scan database files in streaming mode and count domains.
-    Returns only top 20 domains to save memory.
+    Returns domain counter and total lines. Uses threading to avoid blocking event loop.
     """
-    domain_counter = Counter()
-    total_lines = 0
+    def _scan_domains():
+        domain_counter = Counter()
+        total_lines = 0
+        
+        try:
+            paths = list(Path("/tmp/workspace/PmOfBangladesh/ulp/data").glob("*.txt"))
+            
+            for path in paths:
+                try:
+                    with open(path, 'r', encoding='utf-8', errors='replace') as f:
+                        for line in f:
+                            line = line.strip()
+                            if not line:
+                                continue
+                            
+                            total_lines += 1
+                            
+                            # Extract domain from the line
+                            # Format: domain:user:pass or url|user|pass etc
+                            parts = re.split(r'[:;|]', line, maxsplit=2)
+                            if len(parts) >= 2:
+                                identifier = parts[0].strip()
+                                if identifier:
+                                    domain = _extract_domain(identifier)
+                                    domain_counter[domain] += 1
+                except Exception as e:
+                    LOGGER.error(f"Error reading {path}: {e}")
+                    continue
+            
+            return domain_counter, total_lines
+        except Exception as e:
+            LOGGER.error(f"Error scanning database: {e}")
+            return Counter(), 0
     
-    try:
-        paths = list(Path("/tmp/workspace/PmOfBangladesh/ulp/data").glob("*.txt"))
-        
-        for path in paths:
-            try:
-                with open(path, 'r', encoding='utf-8', errors='replace') as f:
-                    for line in f:
-                        line = line.strip()
-                        if not line:
-                            continue
-                        
-                        total_lines += 1
-                        
-                        # Extract domain from the line
-                        # Format: domain:user:pass or url|user|pass etc
-                        parts = re.split(r'[:|;]', line, maxsplit=2)
-                        if len(parts) >= 2:
-                            identifier = parts[0].strip()
-                            if identifier:
-                                domain = _extract_domain(identifier)
-                                domain_counter[domain] += 1
-            except Exception as e:
-                LOGGER.error(f"Error reading {path}: {e}")
-                continue
-        
-        return domain_counter, total_lines
-    except Exception as e:
-        LOGGER.error(f"Error scanning database: {e}")
-        return Counter(), 0
+    # Run blocking I/O in a thread pool to avoid blocking the event loop
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, _scan_domains)
 
 
 def _build_top_20_domains_output(domain_counter: Counter, total_lines: int, db_size: str, free_size: str) -> str:
@@ -177,8 +187,8 @@ async def summary_handler(event, bot):
         
         elapsed_ms = round((time.perf_counter() - t0) * 1000, 2)
         
-        # Get database statistics
-        db_lines, db_size, free_size = _get_db_stats()
+        # Get database statistics (passing total_lines to avoid recounting)
+        db_lines, db_size, free_size = _get_db_stats(total_lines)
     except Exception as exc:
         LOGGER.error(f"summary_handler error: {exc}")
         await edit_message(chat_id, msg.id, "**❌ Error Scanning Database**")
