@@ -23,7 +23,7 @@ from utils.engine import collect_datastore_paths
 
 prefixes = "".join(re.escape(p) for p in config.COMMAND_PREFIXES)
 _summary_pattern = re.compile(rf"^[{prefixes}]summary$", re.IGNORECASE)
-_CREDENTIAL_SEPARATORS = r'[:;|]'  # Regex pattern for credential separators
+CREDENTIAL_SEPARATORS = r'[:;|]'  # Regex pattern for credential separators in plain formats
 
 
 def _extract_domain(identifier: str) -> str:
@@ -104,12 +104,15 @@ def _extract_identifier(line: str) -> str:
     """Extract identifier (URL, email, or domain) from a database line.
     
     Handles formats:
+    - url:user:pass (URL with colon separator)
+    - url|user|pass (URL with pipe separator)
     - domain:user:pass (plain domain with colon separator)
     - domain;user;pass (plain domain with semicolon separator)
-    - url|user|pass (URL with pipe separator)
     - email:user:pass (email format with colon separator)
     - email;user;pass (email format with semicolon separator)
-    - url:user:pass (URL with colon separator)
+    
+    Note: Semicolon is only supported as a separator for non-URL formats.
+    For URLs, only colon (for ports) and pipe (for credentials) are recognized.
     """
     # Check if line starts with a URL protocol
     if line.startswith(('http://', 'https://', 'ftp://')):
@@ -121,6 +124,7 @@ def _extract_identifier(line: str) -> str:
         protocol_end += 3
         
         # Find the first credential separator (: or |) after the protocol
+        # Note: semicolon is not supported for URL formats
         colon_idx = line.find(':', protocol_end)
         pipe_idx = line.find('|', protocol_end)
         
@@ -152,8 +156,8 @@ def _extract_identifier(line: str) -> str:
         return url_part
     
     # Not a URL, use standard split for email or domain
-    # Split on first occurrence of : or | to separate identifier from credentials
-    parts = re.split(_CREDENTIAL_SEPARATORS, line, maxsplit=1)
+    # Split on first occurrence of : ; or | to separate identifier from credentials
+    parts = re.split(CREDENTIAL_SEPARATORS, line, maxsplit=1)
     return parts[0].strip() if parts else line.strip()
 
 
