@@ -608,28 +608,145 @@ async def _run_mixed_combo_pipeline(lines: List[str]) -> Tuple[List[Tuple[str, s
     return unique, removed
 
 
-async def scan_db_for_mixed_combos(caller_file: str) -> Tuple[List[Tuple[str, str, str]], int, float]:
-    """Scan entire database for mixed format combos."""
+async def _run_mixed_combo_pipeline_streaming(
+    file_paths: List[str],
+    max_results: int = 1000,
+    cache_size: int = 50000
+) -> Tuple[List[Tuple[str, str, str]], int, float]:
+    """
+    Memory-efficient streaming pipeline for mixed combo extraction.
+    
+    Processes files sequentially, deduplicates on-the-fly, and limits memory usage.
+    Returns only first max_results unique combos.
+    
+    Args:
+        file_paths: List of database file paths to scan
+        max_results: Maximum number of unique combos to return (default 1000)
+        cache_size: Size of deduplication cache (default 50000)
+    
+    Returns:
+        Tuple of (unique_combos, total_removed_duplicates, elapsed_ms)
+    """
+    t0 = time.perf_counter()
+    loop = asyncio.get_running_loop()
+    
+    # Track deduplication with bounded cache
+    seen: set = set()
+    unique: List[Tuple[str, str, str]] = []
+    total_removed = 0
+    
+    # Process each file individually to avoid loading all data at once
+    for path in file_paths:
+        try:
+            # Read file line by line in streaming fashion
+            batch: List[str] = []
+            batch_count = 0
+            
+            with open(path, 'r', encoding='utf-8', errors='replace') as f:
+                for ln in f:
+                    ln = ln.rstrip('\n')
+                    if ln.strip():
+                        batch.append(ln)
+                        batch_count += 1
+                    
+                    # Process batch when it reaches target size
+                    if batch_count >= _SMALL_CHUNK:
+                        res, _ = await loop.run_in_executor(THREAD_POOL, _scan_mixed_combo_batch, batch)
+                        
+                        # Deduplicate on-the-fly
+                        for item in res:
+                            if len(unique) >= max_results:
+                                # Reached result limit, stop processing
+                                break
+                            
+                            key = (item[0], item[1].lower(), item[2].lower())
+                            if key not in seen:
+                                seen.add(key)
+                                unique.append(item)
+                            else:
+                                total_removed += 1
+                            
+                            # Keep cache bounded to prevent memory issues
+                            if len(seen) > cache_size:
+                                # Remove oldest half from seen to maintain bounded memory
+                                seen_list = list(seen)
+                                seen = set(seen_list[len(seen_list)//2:])
+                        
+                        batch = []
+                        batch_count = 0
+                        await release_event_loop(len(unique))
+                        
+                        # Stop if we've reached the result limit
+                        if len(unique) >= max_results:
+                            break
+            
+            # Process remaining batch
+            if batch and len(unique) < max_results:
+                res, _ = await loop.run_in_executor(THREAD_POOL, _scan_mixed_combo_batch, batch)
+                for item in res:
+                    if len(unique) >= max_results:
+                        break
+                    key = (item[0], item[1].lower(), item[2].lower())
+                    if key not in seen:
+                        seen.add(key)
+                        unique.append(item)
+                    else:
+                        total_removed += 1
+            
+            # Stop if we've reached the result limit
+            if len(unique) >= max_results:
+                break
+                
+        except Exception as e:
+            LOGGER.error(f"Error reading {path}: {e}")
+            continue
+    
+    elapsed = _ms(t0)
+    return unique, total_removed, elapsed
+
+
+async def scan_db_for_mixed_combos(
+    caller_file: str,
+    max_results: int = 1000,
+    use_streaming: bool = True
+) -> Tuple[List[Tuple[str, str, str]], int, float]:
+    """
+    Scan database for mixed format combos with memory-efficient streaming.
+    
+    Args:
+        caller_file: Module file path for locating datastore
+        max_results: Maximum number of results to return (default 1000)
+        use_streaming: Use memory-efficient streaming mode (default True)
+    
+    Returns:
+        Tuple of (unique_combos, total_removed_duplicates, elapsed_ms)
+    """
     t0 = time.perf_counter()
     paths = collect_datastore_paths(caller_file)
     if not paths:
         return [], 0, _ms(t0)
     
-    # Read all lines from all database files
-    all_lines: List[str] = []
-    for path in paths:
-        try:
-            with open(path, 'r', encoding='utf-8', errors='replace') as f:
-                all_lines.extend([ln.rstrip('\n') for ln in f if ln.strip()])
-        except Exception as e:
-            LOGGER.error(f"Error reading {path}: {e}")
-            continue
-    
-    if not all_lines:
-        return [], 0, _ms(t0)
-    
-    unique, removed = await _run_mixed_combo_pipeline(all_lines)
-    return unique, removed, _ms(t0)
+    if use_streaming:
+        # Use memory-efficient streaming approach
+        unique, removed, _ = await _run_mixed_combo_pipeline_streaming(paths, max_results)
+        return unique, removed, _ms(t0)
+    else:
+        # Original approach for backward compatibility
+        # Read all lines from all database files
+        all_lines: List[str] = []
+        for path in paths:
+            try:
+                with open(path, 'r', encoding='utf-8', errors='replace') as f:
+                    all_lines.extend([ln.rstrip('\n') for ln in f if ln.strip()])
+            except Exception as e:
+                LOGGER.error(f"Error reading {path}: {e}")
+                continue
+        
+        if not all_lines:
+            return [], 0, _ms(t0)
+        
+        unique, removed = await _run_mixed_combo_pipeline(all_lines)
+        return unique, removed, _ms(t0)
 
 
 def get_file_size_str(path: str) -> str:
