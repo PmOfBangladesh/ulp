@@ -28,7 +28,7 @@ _summary_pattern = re.compile(rf"^[{prefixes}]summary$", re.IGNORECASE)
 def _extract_domain(identifier: str) -> str:
     """Extract domain from identifier (URL or email)."""
     if identifier.startswith(('http://', 'https://', 'ftp://')):
-        # Extract domain from URL (supports http, https, and ftp)
+        # Extract domain from URL (supports HTTP, HTTPS, and FTP)
         match = re.match(r'(?:https?|ftp)://(?:www\.)?([^/:?#]+)', identifier)
         if match:
             return match.group(1)
@@ -103,9 +103,11 @@ def _extract_identifier(line: str) -> str:
     """Extract identifier (URL, email, or domain) from a database line.
     
     Handles formats:
-    - domain:user:pass (plain domain)
+    - domain:user:pass (plain domain with colon separator)
+    - domain;user;pass (plain domain with semicolon separator)
     - url|user|pass (URL with pipe separator)
-    - email:user:pass (email format)
+    - email:user:pass (email format with colon separator)
+    - email;user;pass (email format with semicolon separator)
     - url:user:pass (URL with colon separator)
     """
     # Check if line starts with a URL protocol
