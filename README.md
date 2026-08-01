@@ -267,4 +267,4 @@ python main.py
 - **Speed test command** — Network speed test + system stats (CPU, RAM, disk, uptime, temp)
 - **Log viewer** — Paginated bot log viewer for admin
 
-THIS REPO ONLY FOR STORING THIS CODE NOT FOR PROFESSIONAL OR COPY PURPOSE,Thanks To Main Author🥰
+This repository is only for storing this code. It is not intended for professional use or copying. Thanks to the original author.🥰
