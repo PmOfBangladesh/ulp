@@ -252,9 +252,9 @@ python main.py
 
 | Role | Name |
 |---|---|
-| **Original Author / Owner** | [@CodeNinjaXd](https://t.me/CodeNinjaXd) |
+| **Modifier** | [@CodeNinjaXd](https://t.me/CodeNinjaXd) |
 | **Updates Channel** | [@NullError_XD](https://t.me/NullError_XD) |
-| **Base Developer** | [@ISmartCoder](https://t.me/ISmartCoder) |
+| **Base Code Developer** | [@ISmartCoder](https://t.me/ISmartCoder) |
 | **Modified & Enhanced by** | [PmOfBangladesh](https://github.com/PmOfBangladesh) |
 
 ### Changes by PmOfBangladesh
@@ -265,5 +265,6 @@ python main.py
 - **Cache refresh integration** — /add and /dl automatically trigger summary cache rebuild
 - **Enhanced regex patterns** — Improved domain extraction, credential separator handling, URL parsing
 - **Speed test command** — Network speed test + system stats (CPU, RAM, disk, uptime, temp)
-- **Log viewer** — Paginated bot log viewer for admins
-- **Rich streaming utilities** — Draft/streaming message support for future rich formatting
+- **Log viewer** — Paginated bot log viewer for admin
+
+THIS REPO ONLY FOR STORING THIS CODE NOT FOR PROFESSIONAL OR COPY PURPOSE,Thanks To Main Author🥰
