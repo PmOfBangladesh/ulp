@@ -1,0 +1,34 @@
+# Telegram session files
+*.session
+*.session-journal
+dl_session.txt
+dl_session.session
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+venv/
+.venv/
+
+# Generated / runtime data
+downloads/*
+!downloads/.gitkeep
+data/*
+!data/.gitkeep
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
