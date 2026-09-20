@@ -1,3 +1,4 @@
 telethon
 uvloop
 cryptg
+speedtest-cli

@@ -24,6 +24,12 @@ from utils.engine import RG_BINARY, THREAD_POOL, collect_datastore_paths
 
 # ── regex / command pattern ──
 prefixes = "".join(re.escape(p) for p in config.COMMAND_PREFIXES)
+
+_OWNER_ONLY = {config.OWNER_ID}
+
+
+def _owner_auth(uid: int) -> bool:
+    return uid in _OWNER_ONLY
 _summary_pattern = re.compile(rf"^[{prefixes}]summary$", re.IGNORECASE)
 CREDENTIAL_SEPARATORS = r'[:;|]'
 _DOMAIN_URL_RE = re.compile(r'(?:https?|ftp)://(?:www\.)?([^/:?#]+)')
@@ -409,6 +415,9 @@ async def summary_handler(event, bot):
     global _summary_cache, _last_cache_time
 
     sender = await event.get_sender()
+    if not _owner_auth(sender.id):
+        LOGGER.warning(f"Unauthorized /summary attempt by {sender.id}")
+        return
     from helpers import add_user
     add_user(sender.id)
 

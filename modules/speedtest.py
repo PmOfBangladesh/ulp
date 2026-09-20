@@ -13,6 +13,12 @@ from bot import ItsMrULPBot
 from helpers import LOGGER, edit_message, new_task, send_message
 
 prefixes = "".join(re.escape(p) for p in config.COMMAND_PREFIXES)
+
+_OWNER_ONLY = {config.OWNER_ID}
+
+
+def _owner_auth(uid: int) -> bool:
+    return uid in _OWNER_ONLY
 _sptest_pattern = re.compile(rf"^[{prefixes}]sptest$", re.IGNORECASE)
 
 
