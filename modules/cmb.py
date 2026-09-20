@@ -36,16 +36,16 @@ _cmb_sessions: Dict[int, Dict] = {}
 
 def _build_picker():
     sb = SmartButtons()
-    sb.button("📥 Mail Pass",   callback_data="cmbfmt:mailpass")
-    sb.button("📥 User Pass",   callback_data="cmbfmt:userpass")
-    sb.button("📥 Number Pass", callback_data="cmbfmt:num_pass")
-    sb.button("❌ Cancel",      callback_data="cmbfmt:cancel")
+    sb.button("📥 Mail Pass",   callback_data="cmbfmt:mailpass", style="success")
+    sb.button("📥 User Pass",   callback_data="cmbfmt:userpass", style="success")
+    sb.button("📥 Number Pass", callback_data="cmbfmt:num_pass", style="success")
+    sb.button("❌ Cancel",      callback_data="cmbfmt:cancel", style="danger")
     return sb.build_menu(b_cols=2)
 
 
 def _build_channel_button():
     sb = SmartButtons()
-    sb.button("Updates Channel 🇧🇩", url=f"https://{config.UPDATE_CHANNEL_URL}")
+    sb.button("Updates Channel 🇧🇩", url=f"https://{config.UPDATE_CHANNEL_URL}", style="primary")
     return sb.build_menu(b_cols=1)
 
 

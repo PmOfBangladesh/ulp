@@ -47,18 +47,18 @@ _pending_sessions: Dict[int, Dict] = {}
 
 def _build_format_picker() -> object:
     sb = SmartButtons()
-    sb.button("📥 Mail Pass",    callback_data="exfmt:mailpass")
-    sb.button("📥 User Pass",    callback_data="exfmt:userpass")
-    sb.button("📥 Number Pass",  callback_data="exfmt:num_pass")
-    sb.button("📥 Domain",       callback_data="exfmt:domain")
-    sb.button("📥 URL",          callback_data="exfmt:url")
-    sb.button("❌ Cancel",       callback_data="exfmt:cancel")
+    sb.button("📥 Mail Pass",    callback_data="exfmt:mailpass", style="success")
+    sb.button("📥 User Pass",    callback_data="exfmt:userpass", style="success")
+    sb.button("📥 Number Pass",  callback_data="exfmt:num_pass", style="success")
+    sb.button("📥 Domain",       callback_data="exfmt:domain", style="success")
+    sb.button("📥 URL",          callback_data="exfmt:url", style="success")
+    sb.button("❌ Cancel",       callback_data="exfmt:cancel", style="danger")
     return sb.build_menu(b_cols=2)
 
 
 def _build_channel_button() -> object:
     sb = SmartButtons()
-    sb.button("Updates Channel 🇧🇩", url=f"https://{config.UPDATE_CHANNEL_URL}")
+    sb.button("Updates Channel 🇧🇩", url=f"https://{config.UPDATE_CHANNEL_URL}", style="primary")
     return sb.build_menu(b_cols=1)
 
 

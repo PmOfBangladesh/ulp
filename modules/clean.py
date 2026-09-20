@@ -115,7 +115,7 @@ async def files_handler(event, bot):
     if not msg:
         return
     btns = _nav_buttons(0, total, chat_id)
-    await ItsMrULPBot.edit_message(chat_id, msg.id, _page_text(files, 0), parse_mode="markdown", buttons=btns)
+    await edit_message(chat_id, msg.id, _page_text(files, 0), parse_mode="markdown", buttons=btns)
 
 
 @ItsMrULPBot.on(events.CallbackQuery(data=re.compile(rb"^dbpg:")))
@@ -136,7 +136,7 @@ async def files_nav_cb(event):
     page = max(0, min(page, total - 1))
     btns = _nav_buttons(page, total, chat_id)
     msg_id = event.query.msg_id
-    await ItsMrULPBot.edit_message(chat_id, msg_id, _page_text(files, page), parse_mode="markdown", buttons=btns)
+    await edit_message(chat_id, msg_id, _page_text(files, page), parse_mode="markdown", buttons=btns)
 
 
 @ItsMrULPBot.on(events.NewMessage(pattern=_clean_pattern))
@@ -167,7 +167,7 @@ async def clean_handler(event, bot):
         "**━━━━━━━━━━━━━━━━**\n"
         "**👁 Navigate These Buttons For Next ✅**"
     )
-    await ItsMrULPBot.edit_message(chat_id, msg.id, text, parse_mode="markdown", buttons=_clean_buttons())
+    await edit_message(chat_id, msg.id, text, parse_mode="markdown", buttons=_clean_buttons())
 
 
 @ItsMrULPBot.on(events.CallbackQuery(data=re.compile(rb"^dbclean:")))
@@ -182,10 +182,10 @@ async def clean_action_cb(event):
     chat_id = event.chat_id
 
     if target == "data":
-        await ItsMrULPBot.edit_message(chat_id, msg_id, "**Cleaning Up Database Files...📄**", parse_mode="markdown", buttons=None)
+        await edit_message(chat_id, msg_id, "**Cleaning Up Database Files...📄**", parse_mode="markdown", buttons=None)
         files = await loop.run_in_executor(None, _data_files)
         if not files:
-            await ItsMrULPBot.edit_message(chat_id, msg_id, "**Sorry Files To Clean Not Found ❌**", parse_mode="markdown", buttons=None)
+            await edit_message(chat_id, msg_id, "**Sorry Files To Clean Not Found ❌**", parse_mode="markdown", buttons=None)
             return
         def _del():
             failed = 0
@@ -199,13 +199,13 @@ async def clean_action_cb(event):
             return failed
         failed = await loop.run_in_executor(None, _del)
         result = "**Successfully Cleaned Up Database...📥**" if failed == 0 else "**Sorry Files To Clean Not Found ❌**"
-        await ItsMrULPBot.edit_message(chat_id, msg_id, result, parse_mode="markdown", buttons=None)
+        await edit_message(chat_id, msg_id, result, parse_mode="markdown", buttons=None)
 
     elif target == "downloads":
-        await ItsMrULPBot.edit_message(chat_id, msg_id, "**Cleaning Up Processed Files...📥**", parse_mode="markdown", buttons=None)
+        await edit_message(chat_id, msg_id, "**Cleaning Up Processed Files...📥**", parse_mode="markdown", buttons=None)
         files = await loop.run_in_executor(None, _dl_files)
         if not files:
-            await ItsMrULPBot.edit_message(chat_id, msg_id, "**Sorry Files To Clean Not Found ❌**", parse_mode="markdown", buttons=None)
+            await edit_message(chat_id, msg_id, "**Sorry Files To Clean Not Found ❌**", parse_mode="markdown", buttons=None)
             return
         def _del():
             failed = 0
@@ -219,4 +219,4 @@ async def clean_action_cb(event):
             return failed
         failed = await loop.run_in_executor(None, _del)
         result = "**Successfully Cleaned Up Files...📄**" if failed == 0 else "**❌ Failed To Clean Up The Files**"
-        await ItsMrULPBot.edit_message(chat_id, msg_id, result, parse_mode="markdown", buttons=None)
+        await edit_message(chat_id, msg_id, result, parse_mode="markdown", buttons=None)

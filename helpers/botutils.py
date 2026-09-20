@@ -1,3 +1,5 @@
+import os
+import json
 from typing import Optional, Union
 
 from telethon.errors import (
@@ -9,14 +11,94 @@ from telethon.errors import (
 )
 from telethon.tl.types import Message
 
+import requests
+import config
 from bot import ItsMrULPBot
 from helpers.logger import LOGGER
+from helpers.buttons import markup_has_styles, markup_to_botapi
+
+
+_BOTAPI = f"https://api.telegram.org/bot{config.BOT_TOKEN}"
+
+
+class BotApiMessage:
+    __slots__ = ("id", "chat_id")
+
+    def __init__(self, mid, chat_id):
+        self.id = mid
+        self.chat_id = chat_id
+
+
+def _md_to_botapi(text):
+    return str(text).replace("**", "*").replace("__", "_")
+
+
+def _pm(parse_mode):
+    return "Markdown" if (parse_mode or "").lower() == "markdown" else parse_mode
+
+
+def _markup_json(buttons):
+    if buttons is None:
+        return None
+    if getattr(buttons, 'has_styles', None) and buttons.has_styles():
+        return {"inline_keyboard": buttons.build_botapi_markup()}
+    if markup_has_styles(buttons):
+        return {"inline_keyboard": markup_to_botapi(buttons)}
+    return None
+
+
+async def _api_send(chat_id, text, buttons, parse_mode="Markdown",
+                    reply_to=None, link_preview=False):
+    try:
+        payload = {
+            "chat_id": chat_id,
+            "text": _md_to_botapi(text),
+            "parse_mode": parse_mode,
+            "reply_markup": _markup_json(buttons),
+            "disable_web_page_preview": not link_preview,
+        }
+        if reply_to:
+            payload["reply_to_message_id"] = getattr(reply_to, "id", reply_to)
+        r = requests.post(f"{_BOTAPI}/sendMessage", json=payload, timeout=30)
+        d = r.json()
+        if d.get("ok"):
+            return BotApiMessage(d["result"]["message_id"], chat_id)
+        LOGGER.error(f"BotAPI send failed: {d.get('description')}")
+    except Exception as e:
+        LOGGER.error(f"BotAPI send error: {e}")
+    return None
+
+
+async def _api_edit(chat_id, message_id, text, buttons, parse_mode="Markdown",
+                    link_preview=False):
+    try:
+        payload = {
+            "chat_id": chat_id,
+            "message_id": getattr(message_id, "id", message_id),
+            "text": _md_to_botapi(text),
+            "parse_mode": parse_mode,
+            "reply_markup": _markup_json(buttons),
+            "disable_web_page_preview": not link_preview,
+        }
+        r = requests.post(f"{_BOTAPI}/editMessageText", json=payload, timeout=30)
+        d = r.json()
+        if d.get("ok"):
+            return BotApiMessage(d["result"]["message_id"], chat_id)
+        if "not modified" in str(d.get("description", "")).lower():
+            return None
+        LOGGER.error(f"BotAPI edit failed: {d.get('description')}")
+    except Exception as e:
+        LOGGER.error(f"BotAPI edit error: {e}")
+    return None
 
 
 async def send_message(chat_id, text, parse_mode='markdown', buttons=None,
                        reply_to=None, link_preview=False, silent=None,
                        background=None, formatting_entities=None,
                        clear_draft=False, schedule=None, comment_to=None):
+    if _markup_json(buttons) is not None:
+        return await _api_send(chat_id, text, buttons, parse_mode=_pm(parse_mode),
+                               reply_to=reply_to, link_preview=link_preview)
     try:
         return await ItsMrULPBot.send_message(
             entity=chat_id, message=text, parse_mode=parse_mode,
@@ -40,6 +122,9 @@ async def edit_message(chat_id, message, text, parse_mode='markdown',
                        buttons=None, link_preview=False,
                        formatting_entities=None, file=None,
                        force_document=False, schedule=None):
+    if (file is None and buttons is not None and _markup_json(buttons) is not None):
+        return await _api_edit(chat_id, message, text, buttons,
+                               parse_mode=_pm(parse_mode), link_preview=link_preview)
     try:
         return await ItsMrULPBot.edit_message(
             entity=chat_id, message=message, text=text, parse_mode=parse_mode,
@@ -74,12 +159,40 @@ async def delete_messages(chat_id, message_ids, revoke=True):
         return False
 
 
+async def _api_send_document(chat_id, file_path, caption, buttons,
+                             parse_mode="Markdown", reply_to=None):
+    try:
+        data = {"chat_id": str(chat_id), "parse_mode": parse_mode}
+        if caption:
+            data["caption"] = _md_to_botapi(caption)
+        if reply_to:
+            data["reply_to_message_id"] = getattr(reply_to, "id", reply_to)
+        mk = _markup_json(buttons)
+        if mk:
+            data["reply_markup"] = json.dumps(mk)
+        with open(file_path, "rb") as fh:
+            r = requests.post(f"{_BOTAPI}/sendDocument", data=data,
+                              files={"document": (os.path.basename(str(file_path)), fh)},
+                              timeout=600)
+        d = r.json()
+        if d.get("ok"):
+            return BotApiMessage(d["result"]["message_id"], chat_id)
+        LOGGER.error(f"BotAPI sendDocument failed: {d.get('description')}")
+    except Exception as e:
+        LOGGER.error(f"BotAPI sendDocument error: {e}")
+    return None
+
+
 async def send_file(chat_id, file, caption=None, parse_mode='markdown',
                     buttons=None, thumb=None, attributes=None, reply_to=None,
                     silent=None, background=None, force_document=False,
                     supports_streaming=False, voice_note=False, video_note=False,
                     formatting_entities=None, progress_callback=None,
                     clear_draft=False, schedule=None, comment_to=None, ttl=None):
+    if (isinstance(file, (str, os.PathLike)) and buttons is not None
+            and _markup_json(buttons) is not None):
+        return await _api_send_document(chat_id, file, caption, buttons,
+                                        parse_mode=_pm(parse_mode), reply_to=reply_to)
     try:
         return await ItsMrULPBot.send_file(
             entity=chat_id, file=file, caption=caption, parse_mode=parse_mode,

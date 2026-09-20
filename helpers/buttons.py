@@ -26,6 +26,7 @@ class SmartButtons:
         self._button = []
         self._header_button = []
         self._footer_button = []
+        self._styles = {}
 
     def button(self, text, callback_data=None, url=None, pay=None, web_app=None,
                login_url=None, switch_inline_query=None,
@@ -33,7 +34,7 @@ class SmartButtons:
                switch_inline_query_chosen_chat=None, copy_text=None,
                callback_game=None, request_peer=None, request_phone=None,
                request_location=None, simple_web_view=None, user_profile=None,
-               position=None):
+               style=None, position=None):
         try:
             if callback_data is not None:
                 encoded = callback_data.encode() if isinstance(callback_data, str) else callback_data
@@ -87,6 +88,9 @@ class SmartButtons:
             LOGGER.error(f"Failed to create button: {e}")
             raise
 
+        if style:
+            self._styles[id(btn)] = style
+
         if not position:
             self._button.append(btn)
         elif position == "header":
@@ -109,6 +113,145 @@ class SmartButtons:
             else:
                 menu.append(self._footer_button)
         return ReplyInlineMarkup(rows=[KeyboardButtonRow(buttons=row) for row in menu])
+
+    def has_styles(self):
+        return bool(self._styles)
+
+    def build_botapi_markup(self, b_cols=1, h_cols=8, f_cols=8):
+        """Bot API inline_keyboard (with colored styles)."""
+        def conv(btn):
+            b = {"text": getattr(btn, "text", "") or ""}
+            data = getattr(btn, "data", None)
+            url = getattr(btn, "url", None)
+            if data:
+                try:
+                    b["callback_data"] = data.decode() if isinstance(data, (bytes, bytearray)) else str(data)
+                except Exception:
+                    b["callback_data"] = "cb"
+            elif url:
+                b["url"] = url
+            else:
+                b["callback_data"] = "cb"
+            st = self._styles.get(id(btn))
+            if st:
+                b["style"] = st
+            return b
+
+        menu = [[conv(x) for x in self._button[i:i + b_cols]]
+                for i in range(0, len(self._button), b_cols)]
+        if self._header_button:
+            if len(self._header_button) > h_cols:
+                for i in range(0, len(self._header_button), h_cols):
+                    menu.insert(0, [conv(x) for x in self._header_button[i:i + h_cols]])
+            else:
+                menu.insert(0, [conv(x) for x in self._header_button])
+        if self._footer_button:
+            if len(self._footer_button) > f_cols:
+                for i in range(0, len(self._footer_button), f_cols):
+                    menu.append([conv(x) for x in self._footer_button[i:i + f_cols]])
+            else:
+                menu.append([conv(x) for x in self._footer_button])
+        return menu
+
+
+# ─────────────────────────────────────────────────────────────
+#  Contextual button colors (Bot API: "primary" | "success" | "danger")
+# ─────────────────────────────────────────────────────────────
+STYLE_MAP = {
+    # navigation / info  -> primary (blue)
+    "main_menu": "primary",
+    "about": "primary",
+    "policy": "primary",
+    "back_to_start": "primary",
+    # actions -> success (green)
+    "exfmt:mailpass": "success",
+    "exfmt:userpass": "success",
+    "exfmt:num_pass": "success",
+    "exfmt:domain": "success",
+    "exfmt:url": "success",
+    "cmbfmt:mailpass": "success",
+    "cmbfmt:userpass": "success",
+    "cmbfmt:num_pass": "success",
+    # destructive -> danger (red)
+    "exfmt:cancel": "danger",
+    "cmbfmt:cancel": "danger",
+    "dbclean:data": "danger",
+    "dbclean:downloads": "danger",
+}
+# prefix rules (navigation families)
+_PREFIX_STYLES = (
+    ("dbpg:", "primary"),
+    ("logpg:", "primary"),
+)
+
+
+def style_for(btn):
+    """Resolve the color style for a Telethon inline button."""
+    st = getattr(btn, "_style", None)
+    if st:
+        return st
+    data = getattr(btn, "data", None)
+    if data:
+        try:
+            d = data.decode() if isinstance(data, (bytes, bytearray)) else str(data)
+        except Exception:
+            d = ""
+        if d in STYLE_MAP:
+            return STYLE_MAP[d]
+        for pref, sty in _PREFIX_STYLES:
+            if d.startswith(pref):
+                return sty
+        return None
+    if getattr(btn, "url", None):
+        return "primary"
+    return None
+
+
+def _iter_rows(markup):
+    """Yield button rows from either a ReplyInlineMarkup or a raw list."""
+    if markup is None:
+        return
+    if hasattr(markup, "rows"):
+        for row in markup.rows:
+            yield list(getattr(row, "buttons", []) or [])
+    elif isinstance(markup, (list, tuple)):
+        for row in markup:
+            if isinstance(row, (list, tuple)):
+                yield list(row)
+            else:
+                yield [row]
+
+
+def _btn_to_api(btn):
+    item = {"text": getattr(btn, "text", "") or ""}
+    data = getattr(btn, "data", None)
+    url = getattr(btn, "url", None)
+    if data:
+        try:
+            item["callback_data"] = data.decode() if isinstance(data, (bytes, bytearray)) else str(data)
+        except Exception:
+            item["callback_data"] = "cb"
+    elif url:
+        item["url"] = url
+    else:
+        item["callback_data"] = "cb"
+    st = style_for(btn)
+    if st:
+        item["style"] = st
+    return item
+
+
+def markup_has_styles(markup):
+    for row in _iter_rows(markup):
+        for b in row:
+            if style_for(b):
+                return True
+    return False
+
+
+def markup_to_botapi(markup):
+    """Convert any Telethon inline markup (or raw row list) to Bot API JSON with colors."""
+    return [[_btn_to_api(b) for b in row] for row in _iter_rows(markup)]
 
     def reset(self):
         self._button = []

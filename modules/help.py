@@ -12,9 +12,9 @@ help_pattern = re.compile(rf"^[{prefixes}](help|cmds)(?:\s+.+)?$", re.IGNORECASE
 
 def build_help_markup():
     sb = SmartButtons()
-    sb.button("⚙ Main Menu", callback_data="main_menu", position="header")
-    sb.button("ℹ️ About Me", callback_data="about")
-    sb.button("📄 Policy & Terms", callback_data="policy")
+    sb.button("⚙ Main Menu", callback_data="main_menu", position="header", style="primary")
+    sb.button("ℹ️ About Me", callback_data="about", style="primary")
+    sb.button("📄 Policy & Terms", callback_data="policy", style="primary")
     return sb.build_menu(b_cols=2, h_cols=1)
 
 
@@ -30,7 +30,7 @@ async def help_handler(event, bot):
     text = (
         f"**Hi** {name} **Welcome To This Bot!**\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
-        f"**Aliya Ulp ⚙️** is your ultimate ULP toolkit on Telegram — process files & more with ease!\n"
+        f"**MOBIUS CLOUD ⚙️** is your ultimate ULP toolkit on Telegram — process files & more with ease!\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
         f"Don't forget to [join](https://{config.UPDATE_CHANNEL_URL}) for updates!"
     )

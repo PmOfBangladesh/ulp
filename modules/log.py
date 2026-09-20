@@ -104,7 +104,7 @@ async def log_handler(event, bot):
         return
 
     btns = _nav_buttons(0, total_pages, chat_id)
-    await ItsMrULPBot.edit_message(
+    await edit_message(
         chat_id, msg.id, _page_text(lines, 0, total_pages),
         parse_mode="html", buttons=btns,
     )
@@ -143,7 +143,7 @@ async def log_nav_cb(event):
     btns = _nav_buttons(new_page, total_pages, chat_id)
     msg_id = event.query.msg_id
 
-    await ItsMrULPBot.edit_message(
+    await edit_message(
         chat_id, msg_id, _page_text(lines, new_page, total_pages),
         parse_mode="html", buttons=btns,
     )

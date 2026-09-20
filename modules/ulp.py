@@ -27,7 +27,7 @@ ulp_pattern = re.compile(rf"^[{prefixes}]ulp(?:\s+.+)?$", re.IGNORECASE)
 
 def build_channel_button():
     sb = SmartButtons()
-    sb.button("Updates Channel 🇧🇩", url=f"https://{config.UPDATE_CHANNEL_URL}")
+    sb.button("Updates Channel 🇧🇩", url=f"https://{config.UPDATE_CHANNEL_URL}", style="primary")
     return sb.build_menu(b_cols=1)
 
 
