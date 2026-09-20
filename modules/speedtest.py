@@ -224,6 +224,9 @@ def _run_speedtest() -> SpeedtestResult:
 @new_task
 async def sptest_handler(event, bot):
     sender = await event.get_sender()
+    if not _owner_auth(sender.id):
+        LOGGER.warning(f"Unauthorized /sptest attempt by {sender.id}")
+        return
     from helpers import add_user
     add_user(sender.id)
     chat_id = event.chat_id
